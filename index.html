@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 ダーツスコアラー</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: #fff; }
+    button { font-size: 1.2rem; padding: 12px 24px; margin: 10px; border-radius: 8px; border: none; background: #007aff; color: #fff; }
+    button:disabled { background: #555; }
+    .score-board { font-size: 2rem; margin: 20px 0; border: 2px solid #333; padding: 15px; border-radius: 10px; }
+    .status { color: #ff9500; font-weight: bold; font-size: 1.2rem; height: 30px; }
+  </style>
+</head>
+<body>
+
+  <h1>🎯 ダーツターゲット</h1>
+
+  <button id="btnConnect" onclick="connectBLE()">1. ESP32に接続</button>
+  <br>
+  <input type="text" id="playerName" placeholder="プレイヤー名" value="Player1" style="font-size:1rem; padding:8px;">
+  <button id="btnRegister" onclick="registerPlayer()" disabled>2. プレイヤー登録</button>
+
+  <div class="score-board">
+    <div>プレイヤー: <span id="dispPlayer">-</span></div>
+    <div>発射数: <span id="dispShot">0</span> / 10</div>
+    <div>合計スコア: <span id="dispTotal">0</span> 点</div>
+  </div>
+
+  <div class="status" id="dispStatus">接続してください</div>
+
+  <button id="btnStartShot" onclick="startShot()" style="font-size: 1.5rem; background: #34c759; width: 80%; height: 60px;" disabled>
+    ▶ 1発スタート
+  </button>
+
+  <script>
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    let characteristic = null;
+    let audioCtx = null;
+
+    // iPhoneからWeb Audio APIで1秒間大音量ビープ音（880Hz）を鳴らす
+    function playBuzzerSound() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = 'square'; // ブザーらしい矩形波
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // 880Hz(A5)
+      gain.gain.setValueAtTime(0.5, audioCtx.currentTime); // 音量
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 1.0); // 1秒後に停止
+    }
+
+    async function connectBLE() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'DartsTarget_ESP32' }],
+          optionalServices: [SERVICE_UUID]
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        await characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', handleBLEData);
+
+        document.getElementById('dispStatus').innerText = "接続成功！";
+        document.getElementById('btnRegister').disabled = false;
+        document.getElementById('btnConnect').disabled = true;
+      } catch (err) {
+        alert("接続失敗: " + err);
+      }
+    }
+
+    function sendCommand(cmd) {
+      if (characteristic) {
+        const encoder = new TextEncoder();
+        characteristic.writeValue(encoder.encode(cmd));
+      }
+    }
+
+    function registerPlayer() {
+      const name = document.getElementById('playerName').value || "Player";
+      sendCommand("REGISTER:" + name);
+    }
+
+    function startShot() {
+      playBuzzerSound(); // ボタンタップ時にiPhoneから即座に大音量ブザー
+      sendCommand("SHOT_START"); // ESP32へ通知
+      document.getElementById('btnStartShot').disabled = true;
+      document.getElementById('dispStatus').innerText = "🔊 ブザー動作中...";
+    }
+
+    function handleBLEData(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      
+      if (value.startsWith("PLAYER_READY:")) {
+        document.getElementById('dispPlayer').innerText = value.split(":")[1];
+        document.getElementById('dispShot').innerText = "0";
+        document.getElementById('dispTotal').innerText = "0";
+        document.getElementById('btnStartShot').disabled = false;
+        document.getElementById('dispStatus').innerText = "「1発スタート」を押してください";
+      }
+      else if (value === "TARGET_ACTIVE") {
+        document.getElementById('dispStatus').innerText = "🎯 判定有効！撃ってください！";
+      }
+      else if (value.startsWith("HIT:")) {
+        // HIT:50|SHOT:1|TOTAL:50
+        const parts = value.split("|");
+        const hit = parts[0].split(":")[1];
+        const shot = parts[1].split(":")[1];
+        const total = parts[2].split(":")[1];
+
+        document.getElementById('dispShot').innerText = shot;
+        document.getElementById('dispTotal').innerText = total;
+        document.getElementById('dispStatus').innerText = `ヒット！ +${hit}点`;
+        
+        if (parseInt(shot) < 10) {
+          document.getElementById('btnStartShot').disabled = false;
+        }
+      }
+      else if (value.startsWith("GAME_OVER:")) {
+        document.getElementById('dispStatus').innerText = "🏁 10発終了！お疲れ様でした！";
+        document.getElementById('btnStartShot').disabled = true;
+      }
+    }
+  </script>
+</body>
+</html>
