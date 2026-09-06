@@ -223,7 +223,7 @@
       </div>
     </div>
 
-    <!-- 最新のヒット通知 -->
+    <!-- 最新の命中ポップアップ -->
     <div id="hitPop" class="hit-pop" style="display:none;">
       🎯 命中！ +50点
     </div>
@@ -262,7 +262,7 @@
     };
 
     const modeDescriptions = {
-      "SHOTS10": "<b>【10発勝負】</b><br>全10発（各自5発ずつ）の合計スコアを競います。",
+      "SHOTS10": "<b>【10発勝負】</b><br>各自5発（全10発）の合計スコアを競います。<br>5発で自動交代します。",
       "COUNTUP": "<b>【カウントアップ 500】</b><br>500点に到達するまでの投球数を競います。<br>5発ごとに交代します。",
       "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンドにつき「P1が5発」「P2が5発」投げ、得点が高い方に1勝が入ります。"
     };
@@ -376,11 +376,12 @@
       gameState.mode = document.querySelector('input[name="gameMode"]:checked').value;
       const bullPoints = document.getElementById("bullScoreInput").value;
 
+      // ゲーム状態リセット
       gameState.p1Score = 0;
       gameState.p2Score = 0;
       gameState.p1Wins = 0;
       gameState.p2Wins = 0;
-      gameState.currentTurn = 1; // P1スタート
+      gameState.currentTurn = 1; // 1番目は必ず Player1 から
       gameState.shotsLeft = 5;
 
       updateUIBoard();
@@ -388,8 +389,6 @@
 
       const encoder = new TextEncoder();
       try {
-        await characteristic.writeValue(encoder.encode("SET_P1:" + gameState.p1Name));
-        await characteristic.writeValue(encoder.encode("SET_P2:" + gameState.p2Name));
         await characteristic.writeValue(encoder.encode("SET_MODE:" + gameState.mode));
         await characteristic.writeValue(encoder.encode("SET_BULL:" + bullPoints));
         await characteristic.writeValue(encoder.encode("SHOT_START"));
@@ -434,63 +433,67 @@
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
-    // 📡 ESP32からの通知受信用ロジック
+    // 📡 ESP32からの通知受信用ロジック（ESP32コードに完全適合）
     function handleNotify(event) {
       const value = new TextDecoder().decode(event.target.value).trim();
-      console.log("ESP32受信データ:", value);
+      console.log("ESP32受信:", value);
 
-      // 明確なゲームセット通知の場合
-      if (value.includes("GAME_OVER")) {
+      // 1. ゲームオーバー処理
+      if (value.startsWith("GAME_OVER") || value.startsWith("VS_GAME_OVER")) {
         playRealBuzzer(0.8, true);
-        let winner = gameState.p1Score > gameState.p2Score ? gameState.p1Name : (gameState.p2Score > gameState.p1Score ? gameState.p2Name : "引き分け");
-        showHitPop(`🎉 勝者: ${winner}!`);
-        addHistoryItem(`🎉 ゲーム終了！ 勝者: <b>${winner}</b>`, "game-end");
+        
+        let winnerName = "引き分け";
+        if (gameState.p1Score > gameState.p2Score) winnerName = gameState.p1Name;
+        else if (gameState.p2Score > gameState.p1Score) winnerName = gameState.p2Name;
+
+        showHitPop(`🎉 勝者: ${winnerName}!`);
+        addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerName}</b>`, "game-end");
         return;
       }
 
-      // 明確な交代命令の場合
-      if (value.includes("ROUND_CLEAR") || value.includes("CHANGE")) {
+      // 2. 5発終了（交代）の通知処理
+      if (value === "ROUND_CLEAR") {
         switchTurn();
         return;
       }
 
-      // 命中通知・数値データの処理（文字列から安全に数字を取り出す）
-      const matches = value.match(/\d+/g);
-      let hitVal = 0;
-
-      if (matches && matches.length > 0) {
-        // 検出された数字の最後のものを取得（得点として扱う）
-        hitVal = parseInt(matches[matches.length - 1], 10);
+      // 3. モード3 (VS10) ラウンド結果
+      if (value.startsWith("VS_ROUND_RESULT")) {
+        playRealBuzzer(0.4, true);
+        if (value.includes("WIN:P1")) gameState.p1Wins++;
+        else if (value.includes("WIN:P2")) gameState.p2Wins++;
+        updateUIBoard();
+        return;
       }
 
-      // 0点以上の数字が取得できたら加算処理を実施
-      if (!isNaN(hitVal)) {
+      // 4. HIT判定 ("HIT:50|SHOT:1|TOTAL:50" 形式の正確な解析)
+      if (value.startsWith("HIT:")) {
         playRealBuzzer(0.12, false);
+
+        // "HIT:50|..." から 命中した点数(50) を正確に取り出す
+        const firstPart = value.split("|")[0]; // "HIT:50"
+        const hitPoints = parseInt(firstPart.replace("HIT:", ""), 10) || 0;
 
         const activePlayerName = (gameState.currentTurn === 1) ? gameState.p1Name : gameState.p2Name;
 
+        // 現在のターンのプレイヤーに点数を加算
         if (gameState.currentTurn === 1) {
-          gameState.p1Score += hitVal;
+          gameState.p1Score += hitPoints;
         } else {
-          gameState.p2Score += hitVal;
+          gameState.p2Score += hitPoints;
         }
 
         gameState.shotsLeft--;
 
-        showHitPop(`🎯 ${activePlayerName}: +${hitVal}点!`);
-        addHistoryItem(`🎯 <b>${activePlayerName}</b>: +${hitVal}点`, "normal");
+        showHitPop(`🎯 ${activePlayerName}: +${hitPoints}点!`);
+        addHistoryItem(`🎯 <b>${activePlayerName}</b>: +${hitPoints}点`, "normal");
 
-        // 5発撃ち終わったら交代（スマホ側自動判定）
-        if (gameState.shotsLeft <= 0) {
-          switchTurn();
-        } else {
-          updateUIBoard();
-        }
+        updateUIBoard();
       }
     }
 
-    // ターン切り替え処理
-    function switchTurn() {
+    // 交代処理関数
+    async function switchTurn() {
       playRealBuzzer(0.4, true);
 
       if (gameState.currentTurn === 1) {
@@ -498,25 +501,22 @@
         gameState.shotsLeft = 5;
         addHistoryItem(`🔄 5発達成！ ➔ 次は <b>${gameState.p2Name}</b> のターン`, "round-end");
       } else {
-        // P2も5発撃ち終わった場合（モード1ならゲーム終了）
-        if (gameState.mode === "SHOTS10") {
-          let winner = "引き分け";
-          if (gameState.p1Score > gameState.p2Score) winner = gameState.p1Name;
-          else if (gameState.p2Score > gameState.p1Score) winner = gameState.p2Name;
-
-          showHitPop(`🎉 勝者: ${winner}!`);
-          addHistoryItem(`🎉 ゲーム終了！ 勝者: <b>${winner}</b>`, "game-end");
-          gameState.shotsLeft = 0;
-          updateUIBoard();
-          return;
-        } else {
-          gameState.currentTurn = 1; // P1へ交代
-          gameState.shotsLeft = 5;
-          addHistoryItem(`🔄 5発達成！ ➔ 次は <b>${gameState.p1Name}</b> のターン`, "round-end");
-        }
+        gameState.currentTurn = 1; // P1へ戻る
+        gameState.shotsLeft = 5;
+        addHistoryItem(`🔄 5発達成！ ➔ 次は <b>${gameState.p1Name}</b> のターン`, "round-end");
       }
 
       updateUIBoard();
+
+      // ESP32へ「次のターン開始」を送信してセンサー検知を再開させる
+      if (characteristic) {
+        const encoder = new TextEncoder();
+        try {
+          await characteristic.writeValue(encoder.encode("NEXT_ROUND"));
+        } catch (e) {
+          console.error("NEXT_ROUND送信失敗:", e);
+        }
+      }
     }
 
     function addHistoryItem(text, type = "normal", badgeText = "") {
