@@ -23,8 +23,8 @@
       background-color: #007aff;
       color: white;
       border: none;
-      padding: 12px 16px;
-      font-size: 16px;
+      padding: 14px 16px;
+      font-size: 18px;
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
@@ -54,25 +54,25 @@
     .player-inputs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .player-row { display: flex; align-items: center; gap: 10px; }
     
-    /* 🔊 カウントダウン表示オーバレイ */
+    /* 🔊 iPhone全画面カウントダウン表示 */
     #countdownOverlay {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.85);
+      background: rgba(0, 0, 0, 0.9);
       color: white;
-      font-size: 80px;
+      font-size: 100px;
       font-weight: bold;
       justify-content: center;
       align-items: center;
-      z-style: 9999;
+      z-index: 9999;
       flex-direction: column;
     }
 
-    /* スコア履歴リスト */
+    /* 📊 スコア履歴リスト */
     .history-list {
       list-style: none; padding: 0; margin: 0;
-      max-height: 200px; overflow-y: auto;
+      max-height: 220px; overflow-y: auto;
       border: 1px solid #ddd; border-radius: 8px; background: #fafafa;
     }
     .history-item {
@@ -86,7 +86,7 @@
 </head>
 <body>
 
-  <!-- カウントダウン表示画面 -->
+  <!-- カウントダウン画面オーバレイ -->
   <div id="countdownOverlay">
     <div id="countNum">3</div>
   </div>
@@ -148,7 +148,7 @@
     <button class="btn" style="background-color: #34c759;" onclick="startWithCountdown()">設定・名前を登録してスタート！</button>
   </div>
 
-  <!-- 5. 🎯 スコア履歴一覧 -->
+  <!-- 5. スコア履歴一覧 -->
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
       <h2 style="margin: 0;">📊 スコア履歴</h2>
@@ -177,24 +177,29 @@
       updateModeDescription();
     };
 
-    // 🔊 ブザー音生成用 Web Audio API
-    function playBeep(freq, duration) {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // 🔊 iPhoneスピーカーで電子音を発声させる関数
+    function playSound(freq, duration, type = 'sine') {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start();
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.log("Audio Error: " + e);
       }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
-      osc.stop(audioCtx.currentTime + duration);
     }
 
     function updateModeDescription() {
@@ -202,17 +207,18 @@
       document.getElementById("modeDescription").innerHTML = modeDescriptions[selectedMode];
     }
 
-    // カウントダウン処理（3 ➔ 2 ➔ 1 ➔ START!）
+    // ⏱️ iPhone画面でのカウントダウン＆サウンド再生
     function startWithCountdown() {
       if (!characteristic) {
         alert("先にBluetooth接続を行ってください。");
         return;
       }
 
-      // 音声コンテキストの初期化（iOS制限対策）
+      // iOSの音声制御をアンロック
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
+      audioCtx.resume();
 
       const overlay = document.getElementById("countdownOverlay");
       const countNum = document.getElementById("countNum");
@@ -220,21 +226,20 @@
 
       let count = 3;
       countNum.innerText = count;
-      playBeep(440, 0.2); // ピッ (3)
+      playSound(440, 0.2); // ピッ (3)
 
       const timer = setInterval(() => {
         count--;
         if (count > 0) {
           countNum.innerText = count;
-          playBeep(440, 0.2); // ピッ (2, 1)
+          playSound(440, 0.2); // ピッ (2, 1)
         } else if (count === 0) {
           countNum.innerText = "START!";
-          playBeep(880, 0.5); // ピー！ (START)
+          playSound(880, 0.5); // ピー！ (START)
         } else {
           clearInterval(timer);
           overlay.style.display = "none";
-          // カウントダウン完了後にESP32へスタート指示
-          applyAndStart();
+          applyAndStart(); // カウント完了でESP32へコマンド送信
         }
       }, 1000);
     }
@@ -300,12 +305,12 @@
       document.getElementById("historyList").innerHTML = '<li class="history-item" style="color: #888;">投球データがここに表示されます</li>';
     }
 
-    // BLE通知受信用（サウンド連動）
+    // ダーツ命中・交代・終了時の音再生処理
     function handleNotify(event) {
       const value = new TextDecoder().decode(event.target.value);
 
       if (value.startsWith("HIT:")) {
-        playBeep(600, 0.15); // 命中音（高めのピッ）
+        playSound(600, 0.15); // ヒット音（ピッ）
         const parts = value.split("|");
         const player = parts[0].substring(4);
         const points = parts[1].substring(2);
@@ -313,12 +318,12 @@
         addHistoryItem(`🎯 <b>${player}</b>: +${points}点`, "normal", `累計 ${total}点`);
       }
       else if (value.startsWith("ROUND_CLEAR:")) {
-        playBeep(523, 0.3); // 交代音
+        playSound(523, 0.3); // 交代音（ポーン）
         const nextPlayer = value.split(":")[1];
         addHistoryItem(`🔄 5発交代 ➔ 次は <b>${nextPlayer}</b> のターン`, "round-end");
       }
       else if (value.startsWith("VS_ROUND_RESULT:")) {
-        playBeep(659, 0.3);
+        playSound(659, 0.3);
         const parts = value.split("|");
         const rNum = parts[0].substring(16);
         const winner = parts[3].substring(7);
@@ -326,11 +331,11 @@
         addHistoryItem(`🏆 ${rNum} 勝利: <b>${winner}</b> (星: ${score})`, "round-end");
       }
       else if (value.startsWith("VS_GAME_OVER") || value.startsWith("GAME_OVER")) {
-        // ファンファーレ音（ファンファンファンファン！）
-        setTimeout(() => playBeep(523, 0.15), 0);
-        setTimeout(() => playBeep(659, 0.15), 150);
-        setTimeout(() => playBeep(784, 0.15), 300);
-        setTimeout(() => playBeep(1046, 0.4), 450);
+        // ファンファーレ音（ド・ミ・ソ・ド）
+        setTimeout(() => playSound(523, 0.15), 0);
+        setTimeout(() => playSound(659, 0.15), 150);
+        setTimeout(() => playSound(784, 0.15), 300);
+        setTimeout(() => playSound(1046, 0.4), 450);
 
         const parts = value.split("|");
         const winner = parts[1].substring(7);
