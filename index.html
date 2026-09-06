@@ -262,8 +262,8 @@
     };
 
     const modeDescriptions = {
-      "SHOTS10": "<b>【10発勝負】</b><br>全10発の合計スコアを競います。<br>5発ごとにプレイヤーを交代します。",
-      "COUNTUP": "<b>【カウントアップ 500】</b><br>500点に到達するまでの投球数を競います。<br>5発ごとにプレイヤーを交代します。",
+      "SHOTS10": "<b>【10発勝負】</b><br>全10発（各自5発ずつ）の合計スコアを競います。",
+      "COUNTUP": "<b>【カウントアップ 500】</b><br>500点に到達するまでの投球数を競います。<br>5発ごとに交代します。",
       "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンドにつき「P1が5発」「P2が5発」投げ、得点が高い方に1勝が入ります。"
     };
 
@@ -277,7 +277,6 @@
       updateModeDescription();
     };
 
-    // 🚨 本物ブザー音生成
     function playRealBuzzer(duration, isLong = false) {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -304,7 +303,6 @@
           osc.start(now);
           osc.stop(now + duration);
         });
-
       } catch (e) {
         console.log("Audio Error: " + e);
       }
@@ -335,7 +333,6 @@
       }
     }
 
-    // ⏱️ カウントダウン
     function startWithCountdown() {
       if (!characteristic) {
         alert("先にBluetooth接続を行ってください。");
@@ -373,19 +370,17 @@
       }, 1000);
     }
 
-    // 設定送信＆ゲームデータ初期化
     async function applyAndStart() {
       gameState.p1Name = document.getElementById("p1Name").value.trim() || "Player1";
       gameState.p2Name = document.getElementById("p2Name").value.trim() || "Player2";
       gameState.mode = document.querySelector('input[name="gameMode"]:checked').value;
       const bullPoints = document.getElementById("bullScoreInput").value;
 
-      // 状態リセット（必ずPlayer1スタート、残5発に設定）
       gameState.p1Score = 0;
       gameState.p2Score = 0;
       gameState.p1Wins = 0;
       gameState.p2Wins = 0;
-      gameState.currentTurn = 1;
+      gameState.currentTurn = 1; // P1スタート
       gameState.shotsLeft = 5;
 
       updateUIBoard();
@@ -423,7 +418,6 @@
 
       document.getElementById("displayRoundInfo").innerText = `残り ${gameState.shotsLeft}/5球`;
 
-      // ターン中のプレイヤー強調
       if (gameState.currentTurn === 1) {
         document.getElementById("p1Card").classList.add("active");
         document.getElementById("p2Card").classList.remove("active");
@@ -440,100 +434,89 @@
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
-    // 📡 ESP32からの通知受信用ロジック（堅牢な文字解析へ修正）
+    // 📡 ESP32からの通知受信用ロジック
     function handleNotify(event) {
       const value = new TextDecoder().decode(event.target.value).trim();
+      console.log("ESP32受信データ:", value);
 
-      // HITメッセージ処理: "HIT:PlayerName|P:50|TOTAL:150" 形式
-      if (value.startsWith("HIT:")) {
+      // 明確なゲームセット通知の場合
+      if (value.includes("GAME_OVER")) {
+        playRealBuzzer(0.8, true);
+        let winner = gameState.p1Score > gameState.p2Score ? gameState.p1Name : (gameState.p2Score > gameState.p1Score ? gameState.p2Name : "引き分け");
+        showHitPop(`🎉 勝者: ${winner}!`);
+        addHistoryItem(`🎉 ゲーム終了！ 勝者: <b>${winner}</b>`, "game-end");
+        return;
+      }
+
+      // 明確な交代命令の場合
+      if (value.includes("ROUND_CLEAR") || value.includes("CHANGE")) {
+        switchTurn();
+        return;
+      }
+
+      // 命中通知・数値データの処理（文字列から安全に数字を取り出す）
+      const matches = value.match(/\d+/g);
+      let hitVal = 0;
+
+      if (matches && matches.length > 0) {
+        // 検出された数字の最後のものを取得（得点として扱う）
+        hitVal = parseInt(matches[matches.length - 1], 10);
+      }
+
+      // 0点以上の数字が取得できたら加算処理を実施
+      if (!isNaN(hitVal)) {
         playRealBuzzer(0.12, false);
 
-        // 文字列の解析を安全に行う
-        try {
-          const rawData = value.substring(4); // "HIT:"のあとを取得
-          const parts = rawData.split("|");
-          
-          const player = parts[0];
-          let points = 0;
-          let total = 0;
+        const activePlayerName = (gameState.currentTurn === 1) ? gameState.p1Name : gameState.p2Name;
 
-          parts.forEach(p => {
-            if (p.startsWith("P:")) points = parseInt(p.replace("P:", ""), 10) || 0;
-            if (p.startsWith("TOTAL:")) total = parseInt(p.replace("TOTAL:", ""), 10) || 0;
-          });
+        if (gameState.currentTurn === 1) {
+          gameState.p1Score += hitVal;
+        } else {
+          gameState.p2Score += hitVal;
+        }
 
-          showHitPop(`🎯 ${player}: +${points}点!`);
+        gameState.shotsLeft--;
 
-          // スコア更新＆ターンの決定
-          if (player === gameState.p1Name) {
-            gameState.p1Score = total;
-            gameState.currentTurn = 1;
-          } else {
-            gameState.p2Score = total;
-            gameState.currentTurn = 2;
-          }
+        showHitPop(`🎯 ${activePlayerName}: +${hitVal}点!`);
+        addHistoryItem(`🎯 <b>${activePlayerName}</b>: +${hitVal}点`, "normal");
 
-          // 残り球数を更新
-          gameState.shotsLeft = Math.max(0, gameState.shotsLeft - 1);
+        // 5発撃ち終わったら交代（スマホ側自動判定）
+        if (gameState.shotsLeft <= 0) {
+          switchTurn();
+        } else {
           updateUIBoard();
-          addHistoryItem(`🎯 <b>${player}</b>: +${points}点`, "normal", `計 ${total}点`);
-
-        } catch(e) {
-          console.error("HIT解析エラー:", e);
         }
       }
-      // ラウンド交代メッセージ処理: "ROUND_CLEAR:PlayerName" 形式
-      else if (value.startsWith("ROUND_CLEAR:")) {
-        playRealBuzzer(0.4, true);
-        const nextPlayer = value.split(":")[1].trim();
-        
-        // 次のプレイヤーに応じてターンをセット
-        gameState.currentTurn = (nextPlayer === gameState.p1Name) ? 1 : 2;
-        gameState.shotsLeft = 5; // 交代したら5発にリセット
-        
-        if (gameState.mode === "VS10") {
-          if (nextPlayer === gameState.p1Name) {
-            gameState.p1Score = 0;
-            gameState.p2Score = 0;
-          }
+    }
+
+    // ターン切り替え処理
+    function switchTurn() {
+      playRealBuzzer(0.4, true);
+
+      if (gameState.currentTurn === 1) {
+        gameState.currentTurn = 2; // P2へ交代
+        gameState.shotsLeft = 5;
+        addHistoryItem(`🔄 5発達成！ ➔ 次は <b>${gameState.p2Name}</b> のターン`, "round-end");
+      } else {
+        // P2も5発撃ち終わった場合（モード1ならゲーム終了）
+        if (gameState.mode === "SHOTS10") {
+          let winner = "引き分け";
+          if (gameState.p1Score > gameState.p2Score) winner = gameState.p1Name;
+          else if (gameState.p2Score > gameState.p1Score) winner = gameState.p2Name;
+
+          showHitPop(`🎉 勝者: ${winner}!`);
+          addHistoryItem(`🎉 ゲーム終了！ 勝者: <b>${winner}</b>`, "game-end");
+          gameState.shotsLeft = 0;
+          updateUIBoard();
+          return;
+        } else {
+          gameState.currentTurn = 1; // P1へ交代
+          gameState.shotsLeft = 5;
+          addHistoryItem(`🔄 5発達成！ ➔ 次は <b>${gameState.p1Name}</b> のターン`, "round-end");
         }
-
-        updateUIBoard();
-        addHistoryItem(`🔄 5発交代 ➔ 次は <b>${nextPlayer}</b> のターン`, "round-end");
       }
-      // モード3(対戦)のラウンド終了
-      else if (value.startsWith("VS_ROUND_RESULT:")) {
-        playRealBuzzer(0.4, true);
-        const parts = value.split("|");
-        let winner = "";
-        let rNum = "";
 
-        parts.forEach(p => {
-          if (p.startsWith("VS_ROUND_RESULT:")) rNum = p.replace("VS_ROUND_RESULT:", "");
-          if (p.startsWith("WINNER:")) winner = p.replace("WINNER:", "");
-        });
-
-        if (winner === gameState.p1Name) gameState.p1Wins++;
-        else if (winner === gameState.p2Name) gameState.p2Wins++;
-
-        updateUIBoard();
-        addHistoryItem(`🏆 Round ${rNum} 勝利: <b>${winner}</b>`, "round-end");
-      }
-      // ゲーム終了処理
-      else if (value.startsWith("VS_GAME_OVER") || value.startsWith("GAME_OVER")) {
-        setTimeout(() => playRealBuzzer(0.15, false), 0);
-        setTimeout(() => playRealBuzzer(0.15, false), 200);
-        setTimeout(() => playRealBuzzer(0.15, false), 400);
-        setTimeout(() => playRealBuzzer(0.8, true), 600);
-
-        let winner = "引き分け";
-        if (value.includes("WINNER:")) {
-          winner = value.split("WINNER:")[1].split("|")[0].trim();
-        }
-
-        showHitPop(`🎉 WINNER: ${winner}!`);
-        addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winner}</b>`, "game-end");
-      }
+      updateUIBoard();
     }
 
     function addHistoryItem(text, type = "normal", badgeText = "") {
