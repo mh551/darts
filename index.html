@@ -61,7 +61,7 @@
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.95);
-      color: #ffcc00;
+      color: #ff3b30;
       font-size: 110px;
       font-weight: 900;
       justify-content: center;
@@ -70,7 +70,7 @@
       letter-spacing: 2px;
     }
 
-    /* 🎯 プレイ画面（対戦スコアボード） */
+    /* 🎯 プレイ画面 */
     #gameScreen {
       display: none;
     }
@@ -256,7 +256,7 @@
       p2Score: 0,
       p1Wins: 0,
       p2Wins: 0,
-      currentTurn: 1,
+      currentTurn: 1, // 1: P1, 2: P2
       shotsLeft: 5,
       mode: "SHOTS10"
     };
@@ -277,30 +277,36 @@
       updateModeDescription();
     };
 
-    // 🔊【大音量ブザー音生成】鋸歯状波(sawtooth)を使った爆音ブザー
-    function playBuzzer(freq, duration, volume = 1.0) {
+    // 🚨 本物ブザー音生成
+    function playRealBuzzer(duration, isLong = false) {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
 
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const now = audioCtx.currentTime;
+        const freqs = isLong ? [120, 243, 365, 487] : [150, 305, 460];
         
-        // 競技用ブザー・警報音に適した鋸歯状波(sawtooth)を採用
-        osc.type = 'sawtooth';
-        osc.frequency.value = freq;
+        freqs.forEach((freq) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
 
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
+          osc.type = (freq % 2 === 0) ? 'square' : 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now);
+          osc.frequency.setValueAtTime(freq + (Math.random() * 10 - 5), now + 0.05);
 
-        osc.start();
-        // 最大音量(1.0)で瞬時にアタック
-        gain.gain.setValueAtTime(volume, audioCtx.currentTime);
-        // 音の終わりにノイズが出ないよう滑らかにカット
-        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
-        osc.stop(audioCtx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.setValueAtTime(0.4, now + duration - 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+          osc.start(now);
+          osc.stop(now + duration);
+        });
+
       } catch (e) {
-        console.log(e);
+        console.log("Audio Error: " + e);
       }
     }
 
@@ -329,7 +335,7 @@
       }
     }
 
-    // ⏱️ 強力なブザー音でのカウントダウン
+    // ⏱️ カウントダウン
     function startWithCountdown() {
       if (!characteristic) {
         alert("先にBluetooth接続を行ってください。");
@@ -345,16 +351,16 @@
 
       let count = 3;
       countNum.innerText = count;
-      playBuzzer(220, 0.25, 1.0); // 低音重厚ブザー（3）
+      playRealBuzzer(0.2, false);
 
       const timer = setInterval(() => {
         count--;
         if (count > 0) {
           countNum.innerText = count;
-          playBuzzer(220, 0.25, 1.0); // 低音重厚ブザー（2, 1）
+          playRealBuzzer(0.2, false);
         } else if (count === 0) {
           countNum.innerText = "START!";
-          playBuzzer(180, 0.8, 1.0); // 長いスタート大爆音ブザー（START!）
+          playRealBuzzer(0.9, true);
         } else {
           clearInterval(timer);
           overlay.style.display = "none";
@@ -367,12 +373,14 @@
       }, 1000);
     }
 
+    // 設定送信＆ゲームデータ初期化
     async function applyAndStart() {
-      gameState.p1Name = document.getElementById("p1Name").value || "Player1";
-      gameState.p2Name = document.getElementById("p2Name").value || "Player2";
+      gameState.p1Name = document.getElementById("p1Name").value.trim() || "Player1";
+      gameState.p2Name = document.getElementById("p2Name").value.trim() || "Player2";
       gameState.mode = document.querySelector('input[name="gameMode"]:checked').value;
       const bullPoints = document.getElementById("bullScoreInput").value;
 
+      // 状態リセット（必ずPlayer1スタート、残5発に設定）
       gameState.p1Score = 0;
       gameState.p2Score = 0;
       gameState.p1Wins = 0;
@@ -415,6 +423,7 @@
 
       document.getElementById("displayRoundInfo").innerText = `残り ${gameState.shotsLeft}/5球`;
 
+      // ターン中のプレイヤー強調
       if (gameState.currentTurn === 1) {
         document.getElementById("p1Card").classList.add("active");
         document.getElementById("p2Card").classList.remove("active");
@@ -431,35 +440,58 @@
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
+    // 📡 ESP32からの通知受信用ロジック（堅牢な文字解析へ修正）
     function handleNotify(event) {
-      const value = new TextDecoder().decode(event.target.value);
+      const value = new TextDecoder().decode(event.target.value).trim();
 
+      // HITメッセージ処理: "HIT:PlayerName|P:50|TOTAL:150" 形式
       if (value.startsWith("HIT:")) {
-        playBuzzer(440, 0.15, 0.8); // ヒット時のブザー音
-        const parts = value.split("|");
-        const player = parts[0].substring(4);
-        const points = parseInt(parts[1].substring(2));
-        const total = parseInt(parts[2].substring(6));
+        playRealBuzzer(0.12, false);
 
-        showHitPop(`🎯 ${player}: +${points}点!`);
+        // 文字列の解析を安全に行う
+        try {
+          const rawData = value.substring(4); // "HIT:"のあとを取得
+          const parts = rawData.split("|");
+          
+          const player = parts[0];
+          let points = 0;
+          let total = 0;
 
-        if (player === gameState.p1Name) {
-          gameState.p1Score = total;
-        } else {
-          gameState.p2Score = total;
+          parts.forEach(p => {
+            if (p.startsWith("P:")) points = parseInt(p.replace("P:", ""), 10) || 0;
+            if (p.startsWith("TOTAL:")) total = parseInt(p.replace("TOTAL:", ""), 10) || 0;
+          });
+
+          showHitPop(`🎯 ${player}: +${points}点!`);
+
+          // スコア更新＆ターンの決定
+          if (player === gameState.p1Name) {
+            gameState.p1Score = total;
+            gameState.currentTurn = 1;
+          } else {
+            gameState.p2Score = total;
+            gameState.currentTurn = 2;
+          }
+
+          // 残り球数を更新
+          gameState.shotsLeft = Math.max(0, gameState.shotsLeft - 1);
+          updateUIBoard();
+          addHistoryItem(`🎯 <b>${player}</b>: +${points}点`, "normal", `計 ${total}点`);
+
+        } catch(e) {
+          console.error("HIT解析エラー:", e);
         }
-
-        gameState.shotsLeft = Math.max(0, gameState.shotsLeft - 1);
-        updateUIBoard();
-        addHistoryItem(`🎯 <b>${player}</b>: +${points}点`, "normal", `計 ${total}点`);
       }
+      // ラウンド交代メッセージ処理: "ROUND_CLEAR:PlayerName" 形式
       else if (value.startsWith("ROUND_CLEAR:")) {
-        playBuzzer(300, 0.4, 0.9); // 交代時のブザー音
-        const nextPlayer = value.split(":")[1];
-        gameState.currentTurn = (nextPlayer === gameState.p1Name) ? 1 : 2;
-        gameState.shotsLeft = 5;
+        playRealBuzzer(0.4, true);
+        const nextPlayer = value.split(":")[1].trim();
         
-        if(gameState.mode === "VS10") {
+        // 次のプレイヤーに応じてターンをセット
+        gameState.currentTurn = (nextPlayer === gameState.p1Name) ? 1 : 2;
+        gameState.shotsLeft = 5; // 交代したら5発にリセット
+        
+        if (gameState.mode === "VS10") {
           if (nextPlayer === gameState.p1Name) {
             gameState.p1Score = 0;
             gameState.p2Score = 0;
@@ -469,27 +501,35 @@
         updateUIBoard();
         addHistoryItem(`🔄 5発交代 ➔ 次は <b>${nextPlayer}</b> のターン`, "round-end");
       }
+      // モード3(対戦)のラウンド終了
       else if (value.startsWith("VS_ROUND_RESULT:")) {
-        playBuzzer(350, 0.4, 0.9);
+        playRealBuzzer(0.4, true);
         const parts = value.split("|");
-        const rNum = parts[0].substring(16);
-        const winner = parts[3].substring(7);
+        let winner = "";
+        let rNum = "";
+
+        parts.forEach(p => {
+          if (p.startsWith("VS_ROUND_RESULT:")) rNum = p.replace("VS_ROUND_RESULT:", "");
+          if (p.startsWith("WINNER:")) winner = p.replace("WINNER:", "");
+        });
 
         if (winner === gameState.p1Name) gameState.p1Wins++;
         else if (winner === gameState.p2Name) gameState.p2Wins++;
 
         updateUIBoard();
-        addHistoryItem(`🏆 ${rNum} 勝利: <b>${winner}</b>`, "round-end");
+        addHistoryItem(`🏆 Round ${rNum} 勝利: <b>${winner}</b>`, "round-end");
       }
+      // ゲーム終了処理
       else if (value.startsWith("VS_GAME_OVER") || value.startsWith("GAME_OVER")) {
-        // ファンファーレのブザー音
-        setTimeout(() => playBuzzer(261, 0.2, 1.0), 0);
-        setTimeout(() => playBuzzer(329, 0.2, 1.0), 200);
-        setTimeout(() => playBuzzer(392, 0.2, 1.0), 400);
-        setTimeout(() => playBuzzer(523, 0.6, 1.0), 600);
+        setTimeout(() => playRealBuzzer(0.15, false), 0);
+        setTimeout(() => playRealBuzzer(0.15, false), 200);
+        setTimeout(() => playRealBuzzer(0.15, false), 400);
+        setTimeout(() => playRealBuzzer(0.8, true), 600);
 
-        const parts = value.split("|");
-        const winner = parts[1].substring(7);
+        let winner = "引き分け";
+        if (value.includes("WINNER:")) {
+          winner = value.split("WINNER:")[1].split("|")[0].trim();
+        }
 
         showHitPop(`🎉 WINNER: ${winner}!`);
         addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winner}</b>`, "game-end");
