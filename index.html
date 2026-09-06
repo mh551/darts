@@ -486,7 +486,7 @@
       console.log("ESP32受信:", value);
 
       if (value.startsWith("GAME_OVER") || value.startsWith("VS_GAME_OVER")) {
-        playRealBuzzer(0.8, true);
+        playRealBuzzer(0.8, true); // ゲームセット音のみ残します
         
         let winnerName = "引き分け";
         if (gameState.p1Score > gameState.p2Score) winnerName = gameState.p1Name;
@@ -506,7 +506,6 @@
       }
 
       if (value.startsWith("VS_ROUND_RESULT")) {
-        playRealBuzzer(0.4, true);
         if (value.includes("WIN:P1")) gameState.p1Wins++;
         else if (value.includes("WIN:P2")) gameState.p2Wins++;
         updateUIBoard();
@@ -514,7 +513,7 @@
       }
 
       if (value.startsWith("HIT:")) {
-        playRealBuzzer(0.12, false);
+        // ヒット時の音を消去しました
 
         const firstPart = value.split("|")[0];
         const hitPoints = parseInt(firstPart.replace("HIT:", ""), 10) || 0;
@@ -538,7 +537,7 @@
 
     // 🔄 交代前の準備（自動・手動共通）
     function prepareForNextTurn(isManual = false) {
-      playRealBuzzer(0.4, true);
+      // 交代時の音を消去しました
 
       // ターンを切り替え
       if (gameState.currentTurn === 1) {
