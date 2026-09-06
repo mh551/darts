@@ -47,7 +47,7 @@
       border-radius: 4px;
       margin-top: 10px;
     }
-    input[type="text"], input[type="number"] {
+    input[type="text"], input[type="number"], select {
       font-size: 16px;
       padding: 6px;
       border: 1px solid #ccc;
@@ -84,7 +84,7 @@
     }
     .score-board {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
       gap: 10px;
       margin-top: 10px;
     }
@@ -92,7 +92,7 @@
       background: #f8f9fa;
       border: 3px solid #ddd;
       border-radius: 12px;
-      padding: 12px;
+      padding: 10px 6px;
       text-align: center;
       transition: all 0.3s ease;
     }
@@ -102,9 +102,9 @@
       box-shadow: 0 0 12px rgba(0, 122, 255, 0.4);
       transform: scale(1.02);
     }
-    .p-name { font-size: 1.1rem; font-weight: bold; color: #333; margin-bottom: 5px; }
-    .p-score { font-size: 2.2rem; font-weight: bold; color: #1a73e8; margin: 5px 0; }
-    .p-sub { font-size: 0.85rem; color: #666; }
+    .p-name { font-size: 1rem; font-weight: bold; color: #333; margin-bottom: 4px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+    .p-score { font-size: 1.8rem; font-weight: bold; color: #1a73e8; margin: 4px 0; }
+    .p-sub { font-size: 0.75rem; color: #666; }
 
     .game-status-bar {
       background: #333;
@@ -185,15 +185,18 @@
 
     <div class="card">
       <h2>2. プレイヤー登録</h2>
-      <div class="player-inputs">
-        <div class="player-row">
-          <label style="width: 80px; font-weight:bold;">P1名前:</label>
-          <input type="text" id="p1Name" value="Player1" style="flex:1;">
-        </div>
-        <div class="player-row">
-          <label style="width: 80px; font-weight:bold;">P2名前:</label>
-          <input type="text" id="p2Name" value="Player2" style="flex:1;">
-        </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <label style="font-weight:bold;">人数選択:</label>
+        <select id="playerCountSelect" onchange="renderPlayerInputs()">
+          <option value="1">1人</option>
+          <option value="2" selected>2人</option>
+          <option value="3">3人</option>
+          <option value="4">4人</option>
+          <option value="5">5人</option>
+        </select>
+      </div>
+      <div class="player-inputs" id="playerInputsContainer">
+        <!-- JSで動的生成 -->
       </div>
     </div>
 
@@ -235,18 +238,8 @@
       <span id="displayModeTitle">10発勝負</span> | <span id="displayRoundInfo">残り 5/5球</span>
     </div>
 
-    <!-- スコア表示パネル -->
-    <div class="score-board">
-      <div id="p1Card" class="player-card active">
-        <div class="p-name" id="displayP1Name">Player1</div>
-        <div class="p-score" id="displayP1Score">0</div>
-        <div class="p-sub" id="displayP1Sub">累計スコア</div>
-      </div>
-      <div id="p2Card" class="player-card">
-        <div class="p-name" id="displayP2Name">Player2</div>
-        <div class="p-score" id="displayP2Score">0</div>
-        <div class="p-sub" id="displayP2Sub">累計スコア</div>
-      </div>
+    <!-- スコア表示パネル（動的生成） -->
+    <div class="score-board" id="scoreBoardContainer">
     </div>
 
     <!-- 最新の命中ポップアップ -->
@@ -287,13 +280,8 @@
     let audioCtx = null;
 
     let gameState = {
-      p1Name: "Player1",
-      p2Name: "Player2",
-      p1Score: 0,
-      p2Score: 0,
-      p1Wins: 0,
-      p2Wins: 0,
-      currentTurn: 1, // 1: P1, 2: P2
+      players: [],        // [{ name: "Player1", score: 0, wins: 0 }, ...]
+      currentTurnIdx: 0,  // 0 〜 (players.length - 1)
       shotsLeft: 5,
       mode: "SHOTS10"
     };
@@ -301,7 +289,7 @@
     const modeDescriptions = {
       "SHOTS10": "<b>【10発勝負】</b><br>各自5発（全10発）の合計スコアを競います。<br>5発で自動交代します。",
       "COUNTUP": "<b>【カウントアップ 500】</b><br>500点に到達するまでの投球数を競います。<br>5発ごとに交代します。",
-      "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンドにつき「P1が5発」「P2が5発」投げ、得点が高い方に1勝が入ります。"
+      "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンドにつき全員が5発ずつ投げ、得点が高い方に1勝が入ります。"
     };
 
     const modeNames = {
@@ -311,8 +299,26 @@
     };
 
     window.onload = function() {
+      renderPlayerInputs();
       updateModeDescription();
     };
+
+    // プレイヤー入力フォームの動的生成 (最大5人)
+    function renderPlayerInputs() {
+      const count = parseInt(document.getElementById("playerCountSelect").value, 10);
+      const container = document.getElementById("playerInputsContainer");
+      container.innerHTML = "";
+
+      for (let i = 1; i <= count; i++) {
+        const row = document.createElement("div");
+        row.className = "player-row";
+        row.innerHTML = `
+          <label style="width: 80px; font-weight:bold;">P${i}名前:</label>
+          <input type="text" id="p${i}Name" value="Player${i}" style="flex:1;">
+        `;
+        container.appendChild(row);
+      }
+    }
 
     function playRealBuzzer(duration, isLong = false) {
       try {
@@ -384,9 +390,15 @@
       const countNum = document.getElementById("countNum");
       const title = document.getElementById("countPlayerTitle");
 
-      const nextPlayerName = (gameState.currentTurn === 1) ? gameState.p1Name : gameState.p2Name;
-      title.innerText = isInitialStart ? `🎯 ${gameState.p1Name} のターン` : `🔄 交代: ${nextPlayerName} のターン`;
+      let nextPlayerName = "Player1";
+      if (isInitialStart) {
+        const p1Val = document.getElementById("p1Name") ? document.getElementById("p1Name").value.trim() : "Player1";
+        nextPlayerName = p1Val || "Player1";
+      } else {
+        nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
+      }
 
+      title.innerText = isInitialStart ? `🎯 ${nextPlayerName} のターン` : `🔄 交代: ${nextPlayerName} のターン`;
       overlay.style.display = "flex";
 
       let count = 3;
@@ -417,20 +429,29 @@
     }
 
     async function applyAndStart() {
-      gameState.p1Name = document.getElementById("p1Name").value.trim() || "Player1";
-      gameState.p2Name = document.getElementById("p2Name").value.trim() || "Player2";
+      const count = parseInt(document.getElementById("playerCountSelect").value, 10);
+      gameState.players = [];
+
+      for (let i = 1; i <= count; i++) {
+        const inputElem = document.getElementById(`p${i}Name`);
+        const nameVal = inputElem ? inputElem.value.trim() : `Player${i}`;
+        gameState.players.push({
+          name: nameVal || `Player${i}`,
+          score: 0,
+          wins: 0
+        });
+      }
+
       gameState.mode = document.querySelector('input[name="gameMode"]:checked').value;
       const bullPoints = document.getElementById("bullScoreInput").value;
 
-      gameState.p1Score = 0;
-      gameState.p2Score = 0;
-      gameState.p1Wins = 0;
-      gameState.p2Wins = 0;
-      gameState.currentTurn = 1;
+      gameState.currentTurnIdx = 0;
       gameState.shotsLeft = 5;
 
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("manualTurnBtn").style.display = "block";
+      
+      initUIBoard();
       updateUIBoard();
       clearHistory();
 
@@ -439,38 +460,55 @@
         await characteristic.writeValue(encoder.encode("SET_MODE:" + gameState.mode));
         await characteristic.writeValue(encoder.encode("SET_BULL:" + bullPoints));
         await characteristic.writeValue(encoder.encode("SHOT_START"));
-        addHistoryItem(`ゲーム開始 [${modeNames[gameState.mode]}]`, "round-end");
+        addHistoryItem(`ゲーム開始 [${modeNames[gameState.mode]}] - 参加人数: ${count}人`, "round-end");
       } catch (err) {
         alert("送信エラー: " + err);
       }
     }
 
+    // プレイヤー数に応じたUI初期生成
+    function initUIBoard() {
+      const container = document.getElementById("scoreBoardContainer");
+      container.innerHTML = "";
+
+      gameState.players.forEach((p, idx) => {
+        const card = document.createElement("div");
+        card.id = `pCard_${idx}`;
+        card.className = `player-card ${idx === 0 ? 'active' : ''}`;
+        card.innerHTML = `
+          <div class="p-name" id="pName_${idx}">${p.name}</div>
+          <div class="p-score" id="pScore_${idx}">0</div>
+          <div class="p-sub" id="pSub_${idx}">累計スコア</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
     function updateUIBoard() {
       document.getElementById("displayModeTitle").innerText = modeNames[gameState.mode];
-      document.getElementById("displayP1Name").innerText = gameState.p1Name;
-      document.getElementById("displayP2Name").innerText = gameState.p2Name;
-
-      if (gameState.mode === "VS10") {
-        document.getElementById("displayP1Score").innerText = gameState.p1Wins + "勝";
-        document.getElementById("displayP2Score").innerText = gameState.p2Wins + "勝";
-        document.getElementById("displayP1Sub").innerText = `(現ラウンド:${gameState.p1Score}点)`;
-        document.getElementById("displayP2Sub").innerText = `(現ラウンド:${gameState.p2Score}点)`;
-      } else {
-        document.getElementById("displayP1Score").innerText = gameState.p1Score;
-        document.getElementById("displayP2Score").innerText = gameState.p2Score;
-        document.getElementById("displayP1Sub").innerText = "累計スコア";
-        document.getElementById("displayP2Sub").innerText = "累計スコア";
-      }
-
       document.getElementById("displayRoundInfo").innerText = `残り ${gameState.shotsLeft}/5球`;
 
-      if (gameState.currentTurn === 1) {
-        document.getElementById("p1Card").classList.add("active");
-        document.getElementById("p2Card").classList.remove("active");
-      } else {
-        document.getElementById("p2Card").classList.add("active");
-        document.getElementById("p1Card").classList.remove("active");
-      }
+      gameState.players.forEach((p, idx) => {
+        const card = document.getElementById(`pCard_${idx}`);
+        const scoreElem = document.getElementById(`pScore_${idx}`);
+        const subElem = document.getElementById(`pSub_${idx}`);
+
+        if (card) {
+          if (idx === gameState.currentTurnIdx) {
+            card.classList.add("active");
+          } else {
+            card.classList.remove("active");
+          }
+        }
+
+        if (gameState.mode === "VS10") {
+          if (scoreElem) scoreElem.innerText = p.wins + "勝";
+          if (subElem) subElem.innerText = `(現: ${p.score}点)`;
+        } else {
+          if (scoreElem) scoreElem.innerText = p.score;
+          if (subElem) subElem.innerText = "累計スコア";
+        }
+      });
     }
 
     function showHitPop(text) {
@@ -486,14 +524,25 @@
       console.log("ESP32受信:", value);
 
       if (value.startsWith("GAME_OVER") || value.startsWith("VS_GAME_OVER")) {
-        playRealBuzzer(0.8, true); // ゲームセット音のみ残します
-        
-        let winnerName = "引き分け";
-        if (gameState.p1Score > gameState.p2Score) winnerName = gameState.p1Name;
-        else if (gameState.p2Score > gameState.p1Score) winnerName = gameState.p2Name;
+        playRealBuzzer(0.8, true); // ゲームセット音
 
-        showHitPop(`🎉 勝者: ${winnerName}!`);
-        addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerName}</b>`, "game-end");
+        // 最高スコアのプレイヤー判定
+        let maxScore = -1;
+        let winners = [];
+        gameState.players.forEach(p => {
+          const targetVal = (gameState.mode === "VS10") ? p.wins : p.score;
+          if (targetVal > maxScore) {
+            maxScore = targetVal;
+            winners = [p.name];
+          } else if (targetVal === maxScore) {
+            winners.push(p.name);
+          }
+        });
+
+        const winnerText = winners.length === 1 ? winners[0] : `引き分け (${winners.join(", ")})`;
+
+        showHitPop(`🎉 勝者: ${winnerText}!`);
+        addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b>`, "game-end");
         document.getElementById("turnStartBox").style.display = "none";
         document.getElementById("manualTurnBtn").style.display = "none";
         return;
@@ -506,30 +555,21 @@
       }
 
       if (value.startsWith("VS_ROUND_RESULT")) {
-        if (value.includes("WIN:P1")) gameState.p1Wins++;
-        else if (value.includes("WIN:P2")) gameState.p2Wins++;
+        // VSモード時の勝者判定ロジックなど拡張用
         updateUIBoard();
         return;
       }
 
       if (value.startsWith("HIT:")) {
-        // ヒット時の音を消去しました
-
         const firstPart = value.split("|")[0];
         const hitPoints = parseInt(firstPart.replace("HIT:", ""), 10) || 0;
 
-        const activePlayerName = (gameState.currentTurn === 1) ? gameState.p1Name : gameState.p2Name;
-
-        if (gameState.currentTurn === 1) {
-          gameState.p1Score += hitPoints;
-        } else {
-          gameState.p2Score += hitPoints;
-        }
-
+        const activePlayer = gameState.players[gameState.currentTurnIdx];
+        activePlayer.score += hitPoints;
         gameState.shotsLeft--;
 
-        showHitPop(`🎯 ${activePlayerName}: +${hitPoints}点!`);
-        addHistoryItem(`🎯 <b>${activePlayerName}</b>: +${hitPoints}点`, "normal");
+        showHitPop(`🎯 ${activePlayer.name}: +${hitPoints}点!`);
+        addHistoryItem(`🎯 <b>${activePlayer.name}</b>: +${hitPoints}点`, "normal");
 
         updateUIBoard();
       }
@@ -537,17 +577,11 @@
 
     // 🔄 交代前の準備（自動・手動共通）
     function prepareForNextTurn(isManual = false) {
-      // 交代時の音を消去しました
-
-      // ターンを切り替え
-      if (gameState.currentTurn === 1) {
-        gameState.currentTurn = 2;
-      } else {
-        gameState.currentTurn = 1;
-      }
+      // 次のプレイヤーのインデックスへ進む（人数分でループ）
+      gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
       gameState.shotsLeft = 5;
 
-      const nextPlayerName = (gameState.currentTurn === 1) ? gameState.p1Name : gameState.p2Name;
+      const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
       
       document.getElementById("nextPlayerAlert").innerText = `次は ${nextPlayerName} のターンです`;
       document.getElementById("turnStartBox").style.display = "block";
@@ -559,7 +593,7 @@
 
     // 🔘 手動交代ボタンが押された時
     function forceChangeTurn() {
-      if (confirm("現在のターンを終了して交代しますか？")) {
+      if (confirm("現在のターンを終了して次のプレイヤーへ交代しますか？")) {
         prepareForNextTurn(true);
       }
     }
@@ -569,7 +603,7 @@
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("manualTurnBtn").style.display = "block";
 
-      const nextPlayerName = (gameState.currentTurn === 1) ? gameState.p1Name : gameState.p2Name;
+      const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
 
       startWithCountdown(false, async () => {
         updateUIBoard();
