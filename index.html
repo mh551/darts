@@ -167,13 +167,11 @@
 </head>
 <body>
 
-  <!-- カウントダウン画面オーバレイ -->
   <div id="countdownOverlay">
     <div id="countPlayerTitle">Next Player</div>
     <div id="countNum">3</div>
   </div>
 
-  <!-- ---------------- 1. 設定画面 ---------------- -->
   <div id="setupScreen">
     <h1>🎯 ダーツボード設定</h1>
 
@@ -196,7 +194,6 @@
         </select>
       </div>
       <div class="player-inputs" id="playerInputsContainer">
-        <!-- JSで動的生成 -->
       </div>
     </div>
 
@@ -232,28 +229,23 @@
   </div>
 
 
-  <!-- ---------------- 2. ゲームプレイ画面 ---------------- -->
   <div id="gameScreen">
     <div class="game-status-bar">
       <span id="displayModeTitle">10発勝負</span> | <span id="displayRoundInfo">第 1 ラウンド (残り 5/5球)</span>
     </div>
 
-    <!-- スコア表示パネル（動的生成） -->
     <div class="score-board" id="scoreBoardContainer">
     </div>
 
-    <!-- 最新の命中ポップアップ -->
     <div id="hitPop" class="hit-pop" style="display:none;">
       🎯 命中！ +50点
     </div>
 
-    <!-- 🔄 交代待機スタートボタンエリア -->
     <div id="turnStartBox" class="change-turn-box" style="display:none;">
       <p style="margin: 0 0 8px 0; font-weight: bold; font-size: 1.1rem;" id="nextPlayerAlert">次は Player2 のターンです</p>
       <button class="btn btn-warning" onclick="startNextTurnCountdown()">▶️ 準備完了！スタート</button>
     </div>
 
-    <!-- 📊 スコア履歴 -->
     <div class="card" style="margin-top: 12px;">
       <h2 style="margin-bottom: 8px;">📊 投球ログ</h2>
       <ul id="historyList" class="history-list">
@@ -261,11 +253,8 @@
       </ul>
     </div>
 
-    <!-- 操作ボタンエリア -->
     <div class="action-buttons">
-      <!-- 手動交代ボタン -->
       <button id="manualTurnBtn" class="btn btn-warning" onclick="forceChangeTurn()">🔄 手動で交代する</button>
-      <!-- 設定画面へ戻るボタン -->
       <button class="btn btn-secondary" onclick="exitGame()">設定画面へ戻る</button>
     </div>
   </div>
@@ -280,8 +269,8 @@
     let audioCtx = null;
 
     let gameState = {
-      players: [],        // [{ name: "Player1", score: 0, wins: 0 }, ...]
-      currentTurnIdx: 0,  // 0 〜 (players.length - 1)
+      players: [],
+      currentTurnIdx: 0,
       currentRound: 1,
       shotsLeft: 5,
       mode: "SHOTS10",
@@ -305,7 +294,6 @@
       updateModeDescription();
     };
 
-    // プレイヤー入力フォームの動的生成
     function renderPlayerInputs() {
       const count = parseInt(document.getElementById("playerCountSelect").value, 10);
       const container = document.getElementById("playerInputsContainer");
@@ -378,7 +366,6 @@
       }
     }
 
-    // ⏱️ カウントダウン実行処理
     function startWithCountdown(isInitialStart = false, callback = null) {
       if (isInitialStart && !characteristic) {
         alert("先にBluetooth接続を行ってください。");
@@ -487,196 +474,4 @@
       });
     }
 
-    function updateUIBoard() {
-      document.getElementById("displayModeTitle").innerText = modeNames[gameState.mode];
-      document.getElementById("displayRoundInfo").innerText = `第 ${gameState.currentRound} R (残り ${gameState.shotsLeft}/5球)`;
-
-      gameState.players.forEach((p, idx) => {
-        const card = document.getElementById(`pCard_${idx}`);
-        const scoreElem = document.getElementById(`pScore_${idx}`);
-        const subElem = document.getElementById(`pSub_${idx}`);
-
-        if (card) {
-          if (idx === gameState.currentTurnIdx) {
-            card.classList.add("active");
-          } else {
-            card.classList.remove("active");
-          }
-        }
-
-        if (gameState.mode === "VS10") {
-          if (scoreElem) scoreElem.innerText = p.wins + "勝";
-          if (subElem) subElem.innerText = `(現: ${p.score}点)`;
-        } else {
-          if (scoreElem) scoreElem.innerText = p.score;
-          if (subElem) subElem.innerText = "累計スコア";
-        }
-      });
-    }
-
-    function showHitPop(text) {
-      const pop = document.getElementById("hitPop");
-      pop.innerText = text;
-      pop.style.display = "block";
-      setTimeout(() => { pop.style.display = "none"; }, 1500);
-    }
-
-    // 📡 ESP32からの通知受信用ロジック
-    function handleNotify(event) {
-      if (gameState.isGameOver) return;
-
-      const value = new TextDecoder().decode(event.target.value).trim();
-      console.log("ESP32受信:", value);
-
-      // モード1・3等のマイコン側強制終了フラグ
-      if (value.startsWith("GAME_OVER") || value.startsWith("VS_GAME_OVER")) {
-        triggerGameOver();
-        return;
-      }
-
-      // 5発終了時（自動交代待機）
-      if (value === "ROUND_CLEAR") {
-        prepareForNextTurn(false);
-        return;
-      }
-
-      if (value.startsWith("VS_ROUND_RESULT")) {
-        updateUIBoard();
-        return;
-      }
-
-      if (value.startsWith("HIT:")) {
-        const firstPart = value.split("|")[0];
-        const hitPoints = parseInt(firstPart.replace("HIT:", ""), 10) || 0;
-
-        const activePlayer = gameState.players[gameState.currentTurnIdx];
-        activePlayer.score += hitPoints;
-        gameState.shotsLeft--;
-
-        showHitPop(`🎯 ${activePlayer.name}: +${hitPoints}点!`);
-        addHistoryItem(`🎯 <b>${activePlayer.name}</b>: +${hitPoints}点`, "normal");
-
-        updateUIBoard();
-      }
-    }
-
-    // ゲーム終了処理
-    function triggerGameOver() {
-      gameState.isGameOver = true;
-      playRealBuzzer(0.8, true);
-
-      let maxScore = -1;
-      let winners = [];
-
-      gameState.players.forEach(p => {
-        const targetVal = (gameState.mode === "VS10") ? p.wins : p.score;
-        if (targetVal > maxScore) {
-          maxScore = targetVal;
-          winners = [p.name];
-        } else if (targetVal === maxScore) {
-          winners.push(p.name);
-        }
-      });
-
-      const winnerText = winners.length === 1 ? winners[0] : `引き分け (${winners.join(", ")})`;
-
-      showHitPop(`🎉 勝者: ${winnerText}!`);
-      addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b>`, "game-end");
-      document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "none";
-    }
-
-    // 🔄 交代前の準備
-    function prepareForNextTurn(isManual = false) {
-      const nextIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-
-      // ラウンドが一周（全員が投げ終わった場合）のチェック
-      if (nextIdx === 0) {
-        // カウントアップ（モード2）の500点達成チェック
-        if (gameState.mode === "COUNTUP") {
-          const reachedPlayers = gameState.players.filter(p => p.score >= 500);
-          if (reachedPlayers.length > 0) {
-            // 最多得点者を決める
-            let topScore = -1;
-            reachedPlayers.forEach(p => {
-              if (p.score > topScore) topScore = p.score;
-            });
-            const topWinners = reachedPlayers.filter(p => p.score === topScore);
-
-            // 単独トップの場合ゲームクリア
-            if (topWinners.length === 1) {
-              triggerGameOver();
-              return;
-            } else {
-              // 同点の場合はサドンデス（次のラウンドへ進む）
-              addHistoryItem(`⚔️ 500点達成者が同点のため延長サドンデス！`, "round-end");
-            }
-          }
-        }
-        gameState.currentRound++;
-      }
-
-      gameState.currentTurnIdx = nextIdx;
-      gameState.shotsLeft = 5;
-
-      const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
-      
-      document.getElementById("nextPlayerAlert").innerText = `次は ${nextPlayerName} のターンです`;
-      document.getElementById("turnStartBox").style.display = "block";
-      document.getElementById("manualTurnBtn").style.display = "none";
-
-      const logText = isManual ? `🔄 [手動交代] <b>${nextPlayerName}</b> の準備待ち` : `⏸️ 5発達成！ <b>${nextPlayerName}</b> の準備待ち`;
-      addHistoryItem(logText, "round-end");
-    }
-
-    // 🔘 手動交代ボタン
-    function forceChangeTurn() {
-      if (confirm("現在のターンを終了して次のプレイヤーへ交代しますか？")) {
-        prepareForNextTurn(true);
-      }
-    }
-
-    // ▶️ ボタンでカウントダウン開始
-    function startNextTurnCountdown() {
-      document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "block";
-
-      const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
-
-      startWithCountdown(false, async () => {
-        updateUIBoard();
-        addHistoryItem(`▶️ ターン開始: <b>${nextPlayerName}</b>`, "round-end");
-
-        if (characteristic) {
-          const encoder = new TextEncoder();
-          try {
-            await characteristic.writeValue(encoder.encode("NEXT_ROUND"));
-          } catch (e) {
-            console.error("NEXT_ROUND送信失敗:", e);
-          }
-        }
-      });
-    }
-
-    function addHistoryItem(text, type = "normal", badgeText = "") {
-      const list = document.getElementById("historyList");
-      if (list.children.length === 1 && list.children[0].style.color !== "") list.innerHTML = "";
-      const li = document.createElement("li");
-      li.className = "history-item " + type;
-      let content = `<span>${text}</span>`;
-      if (badgeText) content += `<span class="badge">${badgeText}</span>`;
-      li.innerHTML = content;
-      list.insertBefore(li, list.firstChild);
-    }
-
-    function clearHistory() {
-      document.getElementById("historyList").innerHTML = '<li class="history-item" style="color: #888;">投球データ待機中...</li>';
-    }
-
-    function exitGame() {
-      document.getElementById("gameScreen").style.display = "none";
-      document.getElementById("setupScreen").style.display = "block";
-    }
-  </script>
-</body>
-</html>
+    function updateUI
