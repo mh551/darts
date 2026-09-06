@@ -150,7 +150,6 @@
     }
     .history-item.round-end { background-color: #e3f2fd; font-weight: bold; color: #0d47a1; }
     .history-item.game-end { background-color: #e8f5e9; font-weight: bold; color: #1b5e20; }
-    .badge { background: #007aff; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
 
     .action-buttons {
       display: flex;
@@ -167,6 +166,7 @@
     <div id="countNum">3</div>
   </div>
 
+  <!-- 1. 設定画面 -->
   <div id="setupScreen">
     <h1>🎯 ダーツボード設定</h1>
 
@@ -202,6 +202,10 @@
           <input type="radio" name="gameMode" value="COUNTUP" onchange="updateModeDescription()">
           モード2: カウントアップ500 (先攻/後攻平等ルール)
         </label>
+        <label class="radio-label">
+          <input type="radio" name="gameMode" value="VS10" onchange="updateModeDescription()">
+          モード3: 10ラウンド対戦 (勝ち点制)
+        </label>
       </div>
       <div id="modeDescription" class="desc-box"></div>
     </div>
@@ -218,9 +222,10 @@
     </div>
   </div>
 
+  <!-- 2. ゲームプレイ画面 -->
   <div id="gameScreen">
     <div class="game-status-bar">
-      <span id="displayModeTitle">カウントアップ</span> | <span id="displayRoundInfo">第 1 ラウンド (残り 5/5球)</span>
+      <span id="displayModeTitle">モード名</span> | <span id="displayRoundInfo">第 1 ラウンド (残り 5/5球)</span>
     </div>
 
     <div class="score-board" id="scoreBoardContainer"></div>
@@ -259,17 +264,19 @@
       shotsLeft: 5,
       mode: "SHOTS10",
       isGameOver: false,
-      pTotalShots: [] // 各プレイヤーの累計投球数
+      pTotalShots: []
     };
 
     const modeDescriptions = {
-      "SHOTS10": "<b>【10発勝負】</b><br>各自5発（全10発）の合計スコアを競います。",
-      "COUNTUP": "<b>【カウントアップ 500】</b><br>500点到達を目指します。全員が毎ラウンド5発ずつ投げ、ラウンド終了時に判定します。"
+      "SHOTS10": "<b>【10発勝負】</b><br>各自合計10発（2ラウンド）投げた合計スコアを競います。",
+      "COUNTUP": "<b>【カウントアップ 500】</b><br>500点到達を目指します。全員が毎ラウンド5発ずつ投げ、ラウンド終了時に判定します。",
+      "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンド（各5発）ごとに最高スコアを出した人に「1勝」が入ります。全10ラウンドでの勝ち数を競います。"
     };
 
     const modeNames = {
       "SHOTS10": "10発勝負",
-      "COUNTUP": "カウントアップ 500"
+      "COUNTUP": "カウントアップ 500",
+      "VS10": "10ラウンド対戦"
     };
 
     window.onload = function() {
@@ -386,7 +393,11 @@
 
       for (let i = 1; i <= count; i++) {
         const nameVal = document.getElementById(`p${i}Name`)?.value.trim() || `Player${i}`;
-        gameState.players.push({ name: nameVal, score: 0 });
+        gameState.players.push({ 
+          name: nameVal, 
+          score: 0,       // 累計点数（またはモード3の現ラウンド点数）
+          wins: 0         // モード3用の勝ち数
+        });
         gameState.pTotalShots.push(0);
       }
 
@@ -422,7 +433,7 @@
           <div id="pCard_${idx}" class="player-card ${idx === 0 ? 'active' : ''}">
             <div class="p-name">${p.name}</div>
             <div class="p-score" id="pScore_${idx}">0</div>
-            <div class="p-sub">累計スコア</div>
+            <div class="p-sub" id="pSub_${idx}">累計スコア</div>
           </div>`;
       });
     }
@@ -434,11 +445,20 @@
       gameState.players.forEach((p, idx) => {
         const card = document.getElementById(`pCard_${idx}`);
         const scoreElem = document.getElementById(`pScore_${idx}`);
+        const subElem = document.getElementById(`pSub_${idx}`);
+
         if (card) {
           if (idx === gameState.currentTurnIdx) card.classList.add("active");
           else card.classList.remove("active");
         }
-        if (scoreElem) scoreElem.innerText = p.score;
+
+        if (gameState.mode === "VS10") {
+          if (scoreElem) scoreElem.innerText = p.wins + "勝";
+          if (subElem) subElem.innerText = `(現R: ${p.score}点)`;
+        } else {
+          if (scoreElem) scoreElem.innerText = p.score;
+          if (subElem) subElem.innerText = "累計スコア";
+        }
       });
     }
 
@@ -453,7 +473,6 @@
       if (gameState.isGameOver) return;
       const value = new TextDecoder().decode(event.target.value).trim();
 
-      // マイコンからのGAME_OVERは全モードで完全に無視する（Webで判定するため）
       if (value.startsWith("GAME_OVER")) return;
 
       if (value === "ROUND_CLEAR") {
@@ -473,28 +492,52 @@
         addHistoryItem(`🎯 <b>${activePlayer.name}</b>: +${hitPoints}点`, "normal");
 
         updateUIBoard();
-
-        // 10発勝負（モード1）で各自が計10発投げきった場合の自動終了判定
-        if (gameState.mode === "SHOTS10" && gameState.pTotalShots[gameState.currentTurnIdx] >= 10) {
-          if (gameState.shotsLeft <= 0) {
-            prepareForNextTurn(false);
-          }
-        }
       }
     }
 
     function prepareForNextTurn(isManual = false) {
       const nextIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
 
-      // ラウンド完了（全員が投球完了したタイミング）
+      // 1ラウンド完了（全員が5発投げ切ったタイミング）
       if (nextIdx === 0) {
-        // モード1（10発勝負）の終了判定：全員が10発（2ラウンド）投げ終えたか
+        
+        // ---------------- モード3: 10ラウンド対戦の判定 ----------------
+        if (gameState.mode === "VS10") {
+          let maxScore = -1;
+          let roundWinners = [];
+
+          gameState.players.forEach(p => {
+            if (p.score > maxScore) {
+              maxScore = p.score;
+              roundWinners = [p];
+            } else if (p.score === maxScore && maxScore > 0) {
+              roundWinners.push(p);
+            }
+          });
+
+          if (roundWinners.length === 1) {
+            roundWinners[0].wins++;
+            addHistoryItem(`🏆 第${gameState.currentRound}R 勝利: <b>${roundWinners[0].name}</b> (${maxScore}点)`, "round-end");
+          } else {
+            addHistoryItem(`🤝 第${gameState.currentRound}R 引き分け (${maxScore}点)`, "round-end");
+          }
+
+          // 次のラウンドへ向けて各プレイヤーの「ラウンド内得点」をリセット
+          gameState.players.forEach(p => p.score = 0);
+
+          if (gameState.currentRound >= 10) {
+            triggerGameOver();
+            return;
+          }
+        }
+
+        // ---------------- モード1: 10発勝負の判定 ----------------
         if (gameState.mode === "SHOTS10" && gameState.pTotalShots.every(s => s >= 10)) {
           triggerGameOver();
           return;
         }
 
-        // モード2（カウントアップ）の終了判定：500点以上のプレイヤーがいるか
+        // ---------------- モード2: カウントアップ500の判定 ----------------
         if (gameState.mode === "COUNTUP") {
           const winners = gameState.players.filter(p => p.score >= 500);
           if (winners.length > 0) {
@@ -522,21 +565,24 @@
       gameState.isGameOver = true;
       playRealBuzzer(0.8, true);
 
-      let maxScore = -1;
+      let maxVal = -1;
       let winners = [];
 
       gameState.players.forEach(p => {
-        if (p.score > maxScore) {
-          maxScore = p.score;
+        const val = (gameState.mode === "VS10") ? p.wins : p.score;
+        if (val > maxVal) {
+          maxVal = val;
           winners = [p.name];
-        } else if (p.score === maxScore) {
+        } else if (val === maxVal) {
           winners.push(p.name);
         }
       });
 
+      const unit = (gameState.mode === "VS10") ? "勝" : "点";
       const winnerText = winners.length === 1 ? winners[0] : `引き分け (${winners.join(", ")})`;
+      
       showHitPop(`🎉 勝者: ${winnerText}!`);
-      addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText} (${maxScore}点)</b>`, "game-end");
+      addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText} (${maxVal}${unit})</b>`, "game-end");
 
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("manualTurnBtn").style.display = "none";
