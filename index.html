@@ -35,6 +35,7 @@
     .btn:active { background-color: #0056b3; }
     .btn-secondary { background-color: #8e8e93; }
     .btn-warning { background-color: #ff9500; }
+    .btn-danger { background-color: #ff3b30; } /* ⚠️ MISSボタン用スタイル */
     .radio-group { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
     .radio-label { display: flex; align-items: center; font-size: 15px; cursor: pointer; }
     .radio-label input { margin-right: 8px; transform: scale(1.2); }
@@ -127,6 +128,10 @@
       border-radius: 8px;
       margin: 10px 0;
       animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .hit-pop.miss-pop {
+      background: #8e8e93;
+      color: #fff;
     }
     @keyframes popIn {
       0% { transform: scale(0.7); opacity: 0; }
@@ -264,6 +269,8 @@
 
     <!-- 操作ボタンエリア -->
     <div class="action-buttons">
+      <!-- ⚠️ MISS（0点）ボタン -->
+      <button id="missBtn" class="btn btn-danger" onclick="processMissShot()">💨 MISS (0点として1投消費)</button>
       <!-- 手動交代ボタン -->
       <button id="manualTurnBtn" class="btn btn-warning" onclick="forceChangeTurn()">🔄 手動で交代する</button>
       <!-- 設定画面へ戻るボタン -->
@@ -451,6 +458,7 @@
 
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("manualTurnBtn").style.display = "block";
+      document.getElementById("missBtn").style.display = "block";
       
       initUIBoard();
       updateUIBoard();
@@ -513,9 +521,14 @@
       });
     }
 
-    function showHitPop(text) {
+    function showHitPop(text, isMiss = false) {
       const pop = document.getElementById("hitPop");
       pop.innerText = text;
+      if (isMiss) {
+        pop.classList.add("miss-pop");
+      } else {
+        pop.classList.remove("miss-pop");
+      }
       pop.style.display = "block";
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
@@ -532,38 +545,7 @@
 
       // 5発終了時（自動交代待機）
       if (value === "ROUND_CLEAR" || value.startsWith("ROUND_CLEAR:")) {
-        // カウントアップモード時の判定ロジック
-        if (gameState.mode === "COUNTUP") {
-          const isLastPlayer = (gameState.currentTurnIdx === gameState.players.length - 1);
-          
-          // 後攻（全員）が投げ終わったタイミングでスコア判定
-          if (isLastPlayer) {
-            let maxScore = -1;
-            gameState.players.forEach(p => {
-              if (p.score > maxScore) maxScore = p.score;
-            });
-
-            // 誰かが500点以上を超えている場合
-            if (maxScore >= 500) {
-              // 最高得点のプレイヤー数をチェック
-              const topPlayers = gameState.players.filter(p => p.score === maxScore);
-
-              if (topPlayers.length === 1) {
-                // 単独トップなら勝利確定！
-                triggerGameOver(topPlayers[0].name, maxScore);
-                return;
-              } else {
-                // 同点（トップが複数）の場合は延長戦に突入
-                gameState.isExtraRound = true;
-                const topNames = topPlayers.map(p => p.name).join("と");
-                showHitPop("🔥 同点！延長戦に突入！");
-                addHistoryItem(`🔥 500点到達も同点 (${maxScore}点: ${topNames})！延長戦(各5発)へ！`, "extra-round");
-              }
-            }
-          }
-        }
-
-        prepareForNextTurn(false);
+        checkRoundCompletion();
         return;
       }
 
@@ -591,6 +573,54 @@
 
         updateUIBoard();
       }
+    }
+
+    // ⚠️ MISS（0点）ボタン押下時の処理
+    function processMissShot() {
+      if (gameState.shotsLeft <= 0) return;
+
+      const activePlayer = gameState.players[gameState.currentTurnIdx];
+      gameState.shotsLeft--;
+
+      showHitPop(`💨 ${activePlayer.name}: MISS (0点)`, true);
+      addHistoryItem(`💨 <b>${activePlayer.name}</b>: MISS (0点)`, "normal");
+
+      updateUIBoard();
+
+      // 5発消化した場合は交代処理へ
+      if (gameState.shotsLeft === 0) {
+        checkRoundCompletion();
+      }
+    }
+
+    // 5投終了時の判定（スコア計算・延長戦・ゲームセット・交代）
+    function checkRoundCompletion() {
+      if (gameState.mode === "COUNTUP") {
+        const isLastPlayer = (gameState.currentTurnIdx === gameState.players.length - 1);
+        
+        if (isLastPlayer) {
+          let maxScore = -1;
+          gameState.players.forEach(p => {
+            if (p.score > maxScore) maxScore = p.score;
+          });
+
+          if (maxScore >= 500) {
+            const topPlayers = gameState.players.filter(p => p.score === maxScore);
+
+            if (topPlayers.length === 1) {
+              triggerGameOver(topPlayers[0].name, maxScore);
+              return;
+            } else {
+              gameState.isExtraRound = true;
+              const topNames = topPlayers.map(p => p.name).join("と");
+              showHitPop("🔥 同点！延長戦に突入！");
+              addHistoryItem(`🔥 500点到達も同点 (${maxScore}点: ${topNames})！延長戦(各5発)へ！`, "extra-round");
+            }
+          }
+        }
+      }
+
+      prepareForNextTurn(false);
     }
 
     // 🎉 ゲームセット共通処理
@@ -623,6 +653,7 @@
       addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b> (${maxScore}点)`, "game-end");
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("manualTurnBtn").style.display = "none";
+      document.getElementById("missBtn").style.display = "none";
     }
 
     function prepareForNextTurn(isManual = false) {
@@ -634,6 +665,7 @@
       document.getElementById("nextPlayerAlert").innerText = `次は ${nextPlayerName} のターンです`;
       document.getElementById("turnStartBox").style.display = "block";
       document.getElementById("manualTurnBtn").style.display = "none";
+      document.getElementById("missBtn").style.display = "none";
 
       const logText = isManual ? `🔄 [手動交代] <b>${nextPlayerName}</b> の準備待ち` : `⏸️ 5発達成！ <b>${nextPlayerName}</b> の準備待ち`;
       addHistoryItem(logText, "round-end");
@@ -648,6 +680,7 @@
     function startNextTurnCountdown() {
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("manualTurnBtn").style.display = "block";
+      document.getElementById("missBtn").style.display = "block";
 
       const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
 
