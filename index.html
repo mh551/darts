@@ -245,14 +245,11 @@
       <span id="displayModeTitle">10発勝負</span> | <span id="displayRoundInfo">残り 5/5球</span>
     </div>
 
-    <!-- スコア表示パネル（動的生成） -->
-    <div class="score-board" id="scoreBoardContainer">
-    </div>
+    <!-- スコア表示パネル -->
+    <div class="score-board" id="scoreBoardContainer"></div>
 
     <!-- 最新の命中ポップアップ -->
-    <div id="hitPop" class="hit-pop" style="display:none;">
-      🎯 命中！ +50点
-    </div>
+    <div id="hitPop" class="hit-pop" style="display:none;">🎯 命中！ +50点</div>
 
     <!-- 🔄 5球終了時に自動表示される「次プレイヤーのスタート」ボックス -->
     <div id="turnStartBox" class="change-turn-box" style="display:none;">
@@ -287,11 +284,11 @@
     let audioCtx = null;
 
     let gameState = {
-      players: [],        // [{ name: "Player1", score: 0, wins: 0 }, ...]
-      currentTurnIdx: 0,  // 0 〜 (players.length - 1)
+      players: [],        
+      currentTurnIdx: 0,  
       shotsLeft: 5,
       mode: "SHOTS10",
-      isExtraRound: false // 延長戦フラグ
+      isExtraRound: false 
     };
 
     const modeDescriptions = {
@@ -531,34 +528,25 @@
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
-    // 📡 ESP32からの通知受信用ロジック
+    // 📡 ESP32からの通知受信用ロジック (強化修正)
     function handleNotify(event) {
+      // 余分な改行や空白を除去
       const value = new TextDecoder().decode(event.target.value).trim();
       console.log("ESP32受信:", value);
 
-      if (value.startsWith("GAME_OVER") || value.startsWith("VS_GAME_OVER")) {
+      if (value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) {
         triggerGameOver();
         return;
       }
 
-      // 5発終了時（自動で交代案内を表示）
-      if (value === "ROUND_CLEAR" || value.startsWith("ROUND_CLEAR:")) {
-        checkRoundCompletion();
-        return;
-      }
-
-      if (value.startsWith("VS_ROUND_RESULT")) {
-        updateUIBoard();
-        return;
-      }
-
-      if (value.startsWith("HIT:")) {
+      // 命中処理（HIT:で始まる場合）
+      if (value.includes("HIT:")) {
         const parts = value.split("|");
         let hitPoints = 0;
 
         for (let i = 0; i < parts.length; i++) {
-          if (parts[i].startsWith("+:")) {
-            hitPoints = parseInt(parts[i].replace("+:", ""), 10) || 0;
+          if (parts[i].includes("+:")) {
+            hitPoints = parseInt(parts[i].replace("+:", "").trim(), 10) || 0;
           }
         }
 
@@ -570,6 +558,23 @@
         addHistoryItem(`🎯 <b>${activePlayer.name}</b>: +${hitPoints}点`, "normal");
 
         updateUIBoard();
+
+        // 【主要修正】5投消化した場合は、ESP32からのROUND_CLEAR待機に関わらず確実に交代処理を実行する
+        if (gameState.shotsLeft <= 0) {
+          checkRoundCompletion();
+        }
+        return;
+      }
+
+      // ESP32から「ROUND_CLEAR」通知が来た場合
+      if (value.includes("ROUND_CLEAR")) {
+        checkRoundCompletion();
+        return;
+      }
+
+      if (value.includes("VS_ROUND_RESULT")) {
+        updateUIBoard();
+        return;
       }
     }
 
@@ -586,16 +591,23 @@
       updateUIBoard();
 
       // 5発消化した場合は自動で交代案内を表示
-      if (gameState.shotsLeft === 0) {
+      if (gameState.shotsLeft <= 0) {
         checkRoundCompletion();
       }
     }
 
     // 5投終了時の判定（スコア計算・延長戦・ゲームセット・交代）
     function checkRoundCompletion() {
-      if (gameState.mode === "COUNTUP") {
+      // 10発勝負で全10発（2人×5発）終わった場合などの判定
+      if (gameState.mode === "SHOTS10") {
         const isLastPlayer = (gameState.currentTurnIdx === gameState.players.length - 1);
-        
+        // 全員が5発ずつ投げ終わったらゲーム終了
+        if (isLastPlayer) {
+          triggerGameOver();
+          return;
+        }
+      } else if (gameState.mode === "COUNTUP") {
+        const isLastPlayer = (gameState.currentTurnIdx === gameState.players.length - 1);
         if (isLastPlayer) {
           let maxScore = -1;
           gameState.players.forEach(p => {
