@@ -241,7 +241,7 @@
         </label>
         <label class="radio-label">
           <input type="radio" name="gameMode" value="COUNTUP" onchange="updateModeDescription()">
-          モード2: カウントアップ500 (全員同回数・同点延長)
+          モード2: カウントアップ500 (全員全手番終了後に判定)
         </label>
         <label class="radio-label">
           <input type="radio" name="gameMode" value="VS10" onchange="updateModeDescription()">
@@ -315,12 +315,12 @@
       mode: "SHOTS10",
       isExtraRound: false,
       completedTurns: 0,
-      vsCurrentRound: 1  // モード3(VS10)の現在のラウンド数
+      vsCurrentRound: 1
     };
 
     const modeDescriptions = {
       "SHOTS10": "<b>【10発勝負】</b><br>各自1ラウンド5発×2ラウンド（計10発）投げ、合計スコアを競います。",
-      "COUNTUP": "<b>【カウントアップ 500】</b><br>後攻終了時点で500点を超えたプレイヤーがいる場合、最高得点者が勝利。<br>※同点の場合は決着がつくまで延長戦(各5発)へ移行します。",
+      "COUNTUP": "<b>【カウントアップ 500】</b><br>全員がそのラウンドの5発を投げ終えた時点で500点を超えたプレイヤーがいる場合、最高得点者が勝利。<br>※同点の場合は決着がつくまで全員で延長戦(各5発)へ移行します。",
       "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンドにつき全員が5発ずつ投げ、得点が高い方に1勝が入ります。"
     };
 
@@ -351,7 +351,6 @@
       }
     }
 
-    // 🔊 ブザー音再生（確実に再生するようにAudioContextの復帰処理を強化）
     function playRealBuzzer(duration, isLong = false) {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -473,7 +472,7 @@
           score: 0,
           wins: 0,
           shotsTaken: 0,
-          roundScore: 0 // VS10モードで1ラウンド毎の得点を保持
+          roundScore: 0
         });
       }
 
@@ -558,7 +557,6 @@
       });
     }
 
-    // 📌 固定判定表示＋効果音再生
     function showHitPop(text, type = "hit") {
       const pop = document.getElementById("hitPop");
       pop.innerText = text;
@@ -567,19 +565,19 @@
 
       if (type === "hit") {
         pop.classList.add("hit-style");
-        playRealBuzzer(0.15, false); // 命中時にブザー
+        playRealBuzzer(0.15, false);
       } else if (type === "miss") {
         pop.classList.add("miss-style");
-        playRealBuzzer(0.3, true);   // MISS時に低音ブザー
+        playRealBuzzer(0.3, true);
       }
     }
 
-    // 📡 ESP32からの通知受信用ロジック
     function handleNotify(event) {
       const value = new TextDecoder().decode(event.target.value).trim();
       console.log("ESP32受信:", value);
 
-      if ((value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) && gameState.mode !== "SHOTS10") {
+      // ESP32側の自動GAME_OVER判定通知はモード2では無視（Web側で全員投球終了時に判定するため）
+      if ((value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) && gameState.mode !== "SHOTS10" && gameState.mode !== "COUNTUP") {
         triggerGameOver();
         return;
       }
@@ -618,7 +616,6 @@
       }
     }
 
-    // ⚠️ MISS（0点）ボタン押下時の処理
     function processMissShot() {
       if (gameState.shotsLeft <= 0) return;
 
@@ -641,10 +638,8 @@
       gameState.completedTurns++; 
 
       if (gameState.mode === "VS10") {
-        // 全員がそのラウンドで5投完了したか確認
         const isLastPlayerOfRound = (gameState.currentTurnIdx === gameState.players.length - 1);
         if (isLastPlayerOfRound) {
-          // 🏆 1ラウンドの勝者を判定して勝利数(+1)を増やす
           evaluateVsRoundWinner();
 
           if (gameState.vsCurrentRound >= 10) {
@@ -661,6 +656,7 @@
           return;
         }
       } else if (gameState.mode === "COUNTUP") {
+        // 全員がそのラウンド（5発ずつ）を投げ終えた場合のみ勝利判定
         const isLastPlayer = (gameState.currentTurnIdx === gameState.players.length - 1);
         if (isLastPlayer) {
           let maxScore = -1;
@@ -668,16 +664,19 @@
             if (p.score > maxScore) maxScore = p.score;
           });
 
+          // 全員投げ終わった時点で誰かが500点以上か確認
           if (maxScore >= 500) {
             const topPlayers = gameState.players.filter(p => p.score === maxScore);
 
             if (topPlayers.length === 1) {
+              // 単独トップの場合、即勝利！
               triggerGameOver(topPlayers[0].name, maxScore);
               return;
             } else {
+              // 同点（トップが2人以上）の場合、全員で延長戦へ
               gameState.isExtraRound = true;
               const topNames = topPlayers.map(p => p.name).join("と");
-              showHitPop("🔥 同点！延長戦に突入！", "hit");
+              showHitPop("🔥 全員投球完了・同点延長戦！", "hit");
               addHistoryItem(`🔥 500点到達も同点 (${maxScore}点: ${topNames})！延長戦(各5発)へ！`, "extra-round");
             }
           }
@@ -687,7 +686,6 @@
       prepareForNextTurn();
     }
 
-    // 🏆 モード3(10ラウンド対戦)の各ラウンド勝者決定＆勝利数加算処理
     function evaluateVsRoundWinner() {
       let maxRoundScore = -1;
       gameState.players.forEach(p => {
@@ -706,13 +704,11 @@
         addHistoryItem(`🤝 <b>Rd.${gameState.vsCurrentRound} 引き分け</b> (${drawNames}: ${maxRoundScore}点)`, "extra-round");
       }
 
-      // 次のラウンドへ向けて各人のラウンド得点をリセット
       gameState.players.forEach(p => {
         p.roundScore = 0;
       });
     }
 
-    // 🎉 ゲームセット共通処理
     function triggerGameOver(winnerNameParam = null, winScoreParam = null) {
       playRealBuzzer(0.8, true);
 
