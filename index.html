@@ -35,7 +35,7 @@
     .btn:active { background-color: #0056b3; }
     .btn-secondary { background-color: #8e8e93; }
     .btn-warning { background-color: #ff9500; }
-    .btn-danger { background-color: #ff3b30; } /* ⚠️ MISSボタン用スタイル */
+    .btn-danger { background-color: #ff3b30; }
     .radio-group { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
     .radio-label { display: flex; align-items: center; font-size: 15px; cursor: pointer; }
     .radio-label input { margin-right: 8px; transform: scale(1.2); }
@@ -138,14 +138,15 @@
       100% { transform: scale(1); opacity: 1; }
     }
 
-    /* 🔄 交代待機カード */
+    /* 🔄 交代スタート待機ボックス */
     .change-turn-box {
       background: #fff3cd;
-      border: 2px solid #ffeba2;
+      border: 2px solid #ffeeba;
       border-radius: 12px;
       padding: 15px;
       text-align: center;
-      margin: 10px 0;
+      margin: 12px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
     /* 📊 履歴 */
@@ -253,10 +254,10 @@
       🎯 命中！ +50点
     </div>
 
-    <!-- 🔄 交代待機スタートボタンエリア -->
+    <!-- 🔄 5球終了時に自動表示される「次プレイヤーのスタート」ボックス -->
     <div id="turnStartBox" class="change-turn-box" style="display:none;">
-      <p style="margin: 0 0 8px 0; font-weight: bold; font-size: 1.1rem;" id="nextPlayerAlert">次は Player2 のターンです</p>
-      <button class="btn btn-warning" onclick="startNextTurnCountdown()">▶️ 準備完了！スタート</button>
+      <p style="margin: 0 0 10px 0; font-weight: bold; font-size: 1.2rem; color: #856404;" id="nextPlayerAlert">次は Player2 のターンです</p>
+      <button class="btn btn-warning" style="font-size: 20px; padding: 16px;" onclick="startNextTurnCountdown()">▶️ 次のプレイヤー スタート！</button>
     </div>
 
     <!-- 📊 スコア履歴 -->
@@ -271,8 +272,6 @@
     <div class="action-buttons">
       <!-- ⚠️ MISS（0点）ボタン -->
       <button id="missBtn" class="btn btn-danger" onclick="processMissShot()">💨 MISS (0点として1投消費)</button>
-      <!-- 手動交代ボタン -->
-      <button id="manualTurnBtn" class="btn btn-warning" onclick="forceChangeTurn()">🔄 手動で交代する</button>
       <!-- 設定画面へ戻るボタン -->
       <button class="btn btn-secondary" onclick="exitGame()">設定画面へ戻る</button>
     </div>
@@ -457,7 +456,6 @@
       gameState.isExtraRound = false;
 
       document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "block";
       document.getElementById("missBtn").style.display = "block";
       
       initUIBoard();
@@ -543,7 +541,7 @@
         return;
       }
 
-      // 5発終了時（自動交代待機）
+      // 5発終了時（自動で交代案内を表示）
       if (value === "ROUND_CLEAR" || value.startsWith("ROUND_CLEAR:")) {
         checkRoundCompletion();
         return;
@@ -587,7 +585,7 @@
 
       updateUIBoard();
 
-      // 5発消化した場合は交代処理へ
+      // 5発消化した場合は自動で交代案内を表示
       if (gameState.shotsLeft === 0) {
         checkRoundCompletion();
       }
@@ -620,7 +618,7 @@
         }
       }
 
-      prepareForNextTurn(false);
+      prepareForNextTurn();
     }
 
     // 🎉 ゲームセット共通処理
@@ -652,11 +650,11 @@
       showHitPop(`🎉 勝者: ${winnerText}!`);
       addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b> (${maxScore}点)`, "game-end");
       document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "none";
       document.getElementById("missBtn").style.display = "none";
     }
 
-    function prepareForNextTurn(isManual = false) {
+    // 🔄 5球投球完了時に交代表示をセットアップ
+    function prepareForNextTurn() {
       gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
       gameState.shotsLeft = 5;
 
@@ -664,22 +662,14 @@
       
       document.getElementById("nextPlayerAlert").innerText = `次は ${nextPlayerName} のターンです`;
       document.getElementById("turnStartBox").style.display = "block";
-      document.getElementById("manualTurnBtn").style.display = "none";
       document.getElementById("missBtn").style.display = "none";
 
-      const logText = isManual ? `🔄 [手動交代] <b>${nextPlayerName}</b> の準備待ち` : `⏸️ 5発達成！ <b>${nextPlayerName}</b> の準備待ち`;
-      addHistoryItem(logText, "round-end");
+      addHistoryItem(`⏸️ 5発達成！ <b>${nextPlayerName}</b> の交代準備完了`, "round-end");
     }
 
-    function forceChangeTurn() {
-      if (confirm("現在のターンを終了して次のプレイヤーへ交代しますか？")) {
-        prepareForNextTurn(true);
-      }
-    }
-
+    // ▶️ 次のプレイヤーがボタンを押してカウントダウン開始
     function startNextTurnCountdown() {
       document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "block";
       document.getElementById("missBtn").style.display = "block";
 
       const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
