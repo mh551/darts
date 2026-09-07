@@ -36,12 +36,12 @@
     .btn-secondary { background-color: #8e8e93; }
     .btn-warning { background-color: #ff9500; }
     
-    /* ⚠️ MISSボタンの縦幅を4倍に拡大 */
+    /* ⚠️ MISSボタン（大型表示） */
     .btn-danger-large { 
       background-color: #ff3b30;
       color: white;
       border: none;
-      height: 120px; /* 縦幅を約4倍に拡大 */
+      height: 120px;
       font-size: 26px;
       font-weight: 900;
       border-radius: 12px;
@@ -234,7 +234,7 @@
       <div class="radio-group">
         <label class="radio-label">
           <input type="radio" name="gameMode" value="SHOTS10" checked onchange="updateModeDescription()">
-          モード1: 10発勝負 (5発交代)
+          モード1: 10発勝負 (各自5発×2Rd＝計10発)
         </label>
         <label class="radio-label">
           <input type="radio" name="gameMode" value="COUNTUP" onchange="updateModeDescription()">
@@ -289,7 +289,7 @@
 
     <!-- 操作ボタンエリア -->
     <div class="action-buttons">
-      <!-- ⚠️ MISS（0点）ボタン：縦幅を4倍に拡大 -->
+      <!-- ⚠️ MISS（0点）ボタン -->
       <button id="missBtn" class="btn-danger-large" onclick="processMissShot()">💨 MISS (0点として1投消費)</button>
       <!-- 設定画面へ戻るボタン -->
       <button class="btn btn-secondary" onclick="exitGame()">設定画面へ戻る</button>
@@ -311,17 +311,17 @@
       shotsLeft: 5,
       mode: "SHOTS10",
       isExtraRound: false,
-      completedTurns: 0  // 5発を消化したプレイヤーの延べ回数
+      completedTurns: 0  // 各プレイヤーがこなした全体のターン数（5発＝1ターン）
     };
 
     const modeDescriptions = {
-      "SHOTS10": "<b>【10発勝負】</b><br>各自5発（全10発）の合計スコアを競います。<br>5発で自動交代します。",
+      "SHOTS10": "<b>【10発勝負】</b><br>各自1ラウンド5発×2ラウンド（計10発）投げ、合計スコアを競います。",
       "COUNTUP": "<b>【カウントアップ 500】</b><br>後攻終了時点で500点を超えたプレイヤーがいる場合、最高得点者が勝利。<br>※同点の場合は決着がつくまで延長戦(各5発)へ移行します。",
       "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンドにつき全員が5発ずつ投げ、得点が高い方に1勝が入ります。"
     };
 
     const modeNames = {
-      "SHOTS10": "10発勝負",
+      "SHOTS10": "10発勝負 (各自10発)",
       "COUNTUP": "カウントアップ 500",
       "VS10": "10ラウンド対戦"
     };
@@ -464,7 +464,8 @@
         gameState.players.push({
           name: nameVal || `Player${i}`,
           score: 0,
-          wins: 0
+          wins: 0,
+          shotsTaken: 0
         });
       }
 
@@ -505,7 +506,7 @@
         card.innerHTML = `
           <div class="p-name" id="pName_${idx}">${p.name}</div>
           <div class="p-score" id="pScore_${idx}">0</div>
-          <div class="p-sub" id="pSub_${idx}">累計スコア</div>
+          <div class="p-sub" id="pSub_${idx}">0 / 10 投</div>
         `;
         container.appendChild(card);
       });
@@ -533,6 +534,9 @@
         if (gameState.mode === "VS10") {
           if (scoreElem) scoreElem.innerText = p.wins + "勝";
           if (subElem) subElem.innerText = `(現: ${p.score}点)`;
+        } else if (gameState.mode === "SHOTS10") {
+          if (scoreElem) scoreElem.innerText = p.score;
+          if (subElem) subElem.innerText = `投球数: ${p.shotsTaken} / 10`;
         } else {
           if (scoreElem) scoreElem.innerText = p.score;
           if (subElem) subElem.innerText = "累計スコア";
@@ -557,7 +561,7 @@
       const value = new TextDecoder().decode(event.target.value).trim();
       console.log("ESP32受信:", value);
 
-      // 【修正】モード1(10発勝負)の時はESP32からの誤ったGAME_OVER信号を無視する
+      // モード1(10発勝負)の時はESP32側のGAME_OVERは無視
       if ((value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) && gameState.mode !== "SHOTS10") {
         triggerGameOver();
         return;
@@ -576,10 +580,11 @@
 
         const activePlayer = gameState.players[gameState.currentTurnIdx];
         activePlayer.score += hitPoints;
+        activePlayer.shotsTaken++;
         gameState.shotsLeft--;
 
         showHitPop(`🎯 ${activePlayer.name}: +${hitPoints}点!`);
-        addHistoryItem(`🎯 <b>${activePlayer.name}</b>: +${hitPoints}点`, "normal");
+        addHistoryItem(`🎯 <b>${activePlayer.name}</b> (${activePlayer.shotsTaken}投目): +${hitPoints}点`, "normal");
 
         updateUIBoard();
 
@@ -605,10 +610,11 @@
       if (gameState.shotsLeft <= 0) return;
 
       const activePlayer = gameState.players[gameState.currentTurnIdx];
+      activePlayer.shotsTaken++;
       gameState.shotsLeft--;
 
       showHitPop(`💨 ${activePlayer.name}: MISS (0点)`, true);
-      addHistoryItem(`💨 <b>${activePlayer.name}</b>: MISS (0点)`, "normal");
+      addHistoryItem(`💨 <b>${activePlayer.name}</b> (${activePlayer.shotsTaken}投目): MISS (0点)`, "normal");
 
       updateUIBoard();
 
@@ -619,11 +625,13 @@
 
     // 5投終了時の判定（スコア計算・延長戦・ゲームセット・交代）
     function checkRoundCompletion() {
-      gameState.completedTurns++; // 完了したターン数をカウントアップ
+      gameState.completedTurns++; 
 
       if (gameState.mode === "SHOTS10") {
-        // 全員が規定回数（参加人数分）投げ終えたら終了
-        if (gameState.completedTurns >= gameState.players.length) {
+        // 各自2ターン（5発×2＝計10発）を終えたか判定
+        // 参加人数 × 2 ターン数に達したら全員10発終了
+        const targetTotalTurns = gameState.players.length * 2;
+        if (gameState.completedTurns >= targetTotalTurns) {
           triggerGameOver();
           return;
         }
