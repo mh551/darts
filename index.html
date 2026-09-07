@@ -518,7 +518,7 @@
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
-    // 📡 ESP32からの通知受信用ロジック
+    // 📡 ESP32からの通知受信用ロジック (修正適用箇所)
     function handleNotify(event) {
       const value = new TextDecoder().decode(event.target.value).trim();
       console.log("ESP32受信:", value);
@@ -549,20 +549,26 @@
       }
 
       // 5発終了時（自動交代待機）
-      if (value === "ROUND_CLEAR") {
+      if (value === "ROUND_CLEAR" || value.startsWith("ROUND_CLEAR:")) {
         prepareForNextTurn(false);
         return;
       }
 
       if (value.startsWith("VS_ROUND_RESULT")) {
-        // VSモード時の勝者判定ロジックなど拡張用
         updateUIBoard();
         return;
       }
 
       if (value.startsWith("HIT:")) {
-        const firstPart = value.split("|")[0];
-        const hitPoints = parseInt(firstPart.replace("HIT:", ""), 10) || 0;
+        // 例: "HIT:Player1|+:50|TOTAL:50" を '|' で分解して点数を正確に抽出
+        const parts = value.split("|");
+        let hitPoints = 0;
+
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i].startsWith("+:")) {
+            hitPoints = parseInt(parts[i].replace("+:", ""), 10) || 0;
+          }
+        }
 
         const activePlayer = gameState.players[gameState.currentTurnIdx];
         activePlayer.score += hitPoints;
