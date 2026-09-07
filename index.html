@@ -35,7 +35,29 @@
     .btn:active { background-color: #0056b3; }
     .btn-secondary { background-color: #8e8e93; }
     .btn-warning { background-color: #ff9500; }
-    .btn-danger { background-color: #ff3b30; }
+    
+    /* ⚠️ MISSボタンの縦幅を4倍に拡大 */
+    .btn-danger-large { 
+      background-color: #ff3b30;
+      color: white;
+      border: none;
+      height: 120px; /* 縦幅を約4倍に拡大 */
+      font-size: 26px;
+      font-weight: 900;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+      box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-danger-large:active {
+      background-color: #c70000;
+      transform: scale(0.98);
+    }
+
     .radio-group { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
     .radio-label { display: flex; align-items: center; font-size: 15px; cursor: pointer; }
     .radio-label input { margin-right: 8px; transform: scale(1.2); }
@@ -167,7 +189,7 @@
     .action-buttons {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
       margin-top: 15px;
     }
   </style>
@@ -267,8 +289,8 @@
 
     <!-- 操作ボタンエリア -->
     <div class="action-buttons">
-      <!-- ⚠️ MISS（0点）ボタン -->
-      <button id="missBtn" class="btn btn-danger" onclick="processMissShot()">💨 MISS (0点として1投消費)</button>
+      <!-- ⚠️ MISS（0点）ボタン：縦幅を4倍に拡大 -->
+      <button id="missBtn" class="btn-danger-large" onclick="processMissShot()">💨 MISS (0点として1投消費)</button>
       <!-- 設定画面へ戻るボタン -->
       <button class="btn btn-secondary" onclick="exitGame()">設定画面へ戻る</button>
     </div>
@@ -288,7 +310,8 @@
       currentTurnIdx: 0,  
       shotsLeft: 5,
       mode: "SHOTS10",
-      isExtraRound: false 
+      isExtraRound: false,
+      completedTurns: 0  // 5発を消化したプレイヤーの延べ回数
     };
 
     const modeDescriptions = {
@@ -450,10 +473,11 @@
 
       gameState.currentTurnIdx = 0;
       gameState.shotsLeft = 5;
+      gameState.completedTurns = 0;
       gameState.isExtraRound = false;
 
       document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("missBtn").style.display = "block";
+      document.getElementById("missBtn").style.display = "flex";
       
       initUIBoard();
       updateUIBoard();
@@ -528,18 +552,18 @@
       setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
-    // 📡 ESP32からの通知受信用ロジック (強化修正)
+    // 📡 ESP32からの通知受信用ロジック
     function handleNotify(event) {
-      // 余分な改行や空白を除去
       const value = new TextDecoder().decode(event.target.value).trim();
       console.log("ESP32受信:", value);
 
-      if (value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) {
+      // 【修正】モード1(10発勝負)の時はESP32からの誤ったGAME_OVER信号を無視する
+      if ((value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) && gameState.mode !== "SHOTS10") {
         triggerGameOver();
         return;
       }
 
-      // 命中処理（HIT:で始まる場合）
+      // 命中処理
       if (value.includes("HIT:")) {
         const parts = value.split("|");
         let hitPoints = 0;
@@ -559,15 +583,13 @@
 
         updateUIBoard();
 
-        // 【主要修正】5投消化した場合は、ESP32からのROUND_CLEAR待機に関わらず確実に交代処理を実行する
         if (gameState.shotsLeft <= 0) {
           checkRoundCompletion();
         }
         return;
       }
 
-      // ESP32から「ROUND_CLEAR」通知が来た場合
-      if (value.includes("ROUND_CLEAR")) {
+      if (value.includes("ROUND_CLEAR") && gameState.shotsLeft <= 0) {
         checkRoundCompletion();
         return;
       }
@@ -590,7 +612,6 @@
 
       updateUIBoard();
 
-      // 5発消化した場合は自動で交代案内を表示
       if (gameState.shotsLeft <= 0) {
         checkRoundCompletion();
       }
@@ -598,11 +619,11 @@
 
     // 5投終了時の判定（スコア計算・延長戦・ゲームセット・交代）
     function checkRoundCompletion() {
-      // 10発勝負で全10発（2人×5発）終わった場合などの判定
+      gameState.completedTurns++; // 完了したターン数をカウントアップ
+
       if (gameState.mode === "SHOTS10") {
-        const isLastPlayer = (gameState.currentTurnIdx === gameState.players.length - 1);
-        // 全員が5発ずつ投げ終わったらゲーム終了
-        if (isLastPlayer) {
+        // 全員が規定回数（参加人数分）投げ終えたら終了
+        if (gameState.completedTurns >= gameState.players.length) {
           triggerGameOver();
           return;
         }
@@ -682,7 +703,7 @@
     // ▶️ 次のプレイヤーがボタンを押してカウントダウン開始
     function startNextTurnCountdown() {
       document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("missBtn").style.display = "block";
+      document.getElementById("missBtn").style.display = "flex";
 
       const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
 
