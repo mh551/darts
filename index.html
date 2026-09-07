@@ -139,25 +139,30 @@
       margin-bottom: 10px;
     }
 
-    /* 💥 命中ポップアップ */
+    /* 📌 固定表示の判定ディスプレイ */
     .hit-pop {
-      background: #ffcc00;
-      color: #000;
-      font-size: 1.4rem;
+      background: #e9ecef;
+      color: #495057;
+      font-size: 1.3rem;
       font-weight: bold;
       text-align: center;
-      padding: 10px;
-      border-radius: 8px;
+      padding: 14px;
+      border-radius: 10px;
       margin: 10px 0;
-      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 2px solid #ced4da;
+      transition: all 0.2s ease;
     }
-    .hit-pop.miss-pop {
-      background: #8e8e93;
-      color: #fff;
+    /* 🎯 HIT時（黄色で強調固定） */
+    .hit-pop.hit-style {
+      background: #fff3cd;
+      color: #856404;
+      border-color: #ffeeba;
     }
-    @keyframes popIn {
-      0% { transform: scale(0.7); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
+    /* 💨 MISS時（グレーで強調固定） */
+    .hit-pop.miss-style {
+      background: #e2e3e5;
+      color: #383d41;
+      border-color: #d6d8db;
     }
 
     /* 🔄 交代スタート待機ボックス */
@@ -270,8 +275,8 @@
     <!-- スコア表示パネル -->
     <div class="score-board" id="scoreBoardContainer"></div>
 
-    <!-- 最新の命中ポップアップ -->
-    <div id="hitPop" class="hit-pop" style="display:none;">🎯 命中！ +50点</div>
+    <!-- 📌 最新の投球結果（常時固定表示エリア） -->
+    <div id="hitPop" class="hit-pop">直近の判定: 投球待機中...</div>
 
     <!-- 🔄 5球終了時に自動表示される「次プレイヤーのスタート」ボックス -->
     <div id="turnStartBox" class="change-turn-box" style="display:none;">
@@ -311,7 +316,7 @@
       shotsLeft: 5,
       mode: "SHOTS10",
       isExtraRound: false,
-      completedTurns: 0  // 各プレイヤーがこなした全体のターン数（5発＝1ターン）
+      completedTurns: 0
     };
 
     const modeDescriptions = {
@@ -483,6 +488,7 @@
       initUIBoard();
       updateUIBoard();
       clearHistory();
+      showHitPop("直近の判定: 投球待機中...", "none");
 
       const encoder = new TextEncoder();
       try {
@@ -544,16 +550,19 @@
       });
     }
 
-    function showHitPop(text, isMiss = false) {
+    // 📌 消えない判定表示（常時固定）
+    function showHitPop(text, type = "hit") {
       const pop = document.getElementById("hitPop");
       pop.innerText = text;
-      if (isMiss) {
-        pop.classList.add("miss-pop");
-      } else {
-        pop.classList.remove("miss-pop");
+
+      // 一旦クラスをクリア
+      pop.classList.remove("hit-style", "miss-style");
+
+      if (type === "hit") {
+        pop.classList.add("hit-style");
+      } else if (type === "miss") {
+        pop.classList.add("miss-style");
       }
-      pop.style.display = "block";
-      setTimeout(() => { pop.style.display = "none"; }, 1500);
     }
 
     // 📡 ESP32からの通知受信用ロジック
@@ -561,7 +570,6 @@
       const value = new TextDecoder().decode(event.target.value).trim();
       console.log("ESP32受信:", value);
 
-      // モード1(10発勝負)の時はESP32側のGAME_OVERは無視
       if ((value.includes("GAME_OVER") || value.includes("VS_GAME_OVER")) && gameState.mode !== "SHOTS10") {
         triggerGameOver();
         return;
@@ -583,7 +591,7 @@
         activePlayer.shotsTaken++;
         gameState.shotsLeft--;
 
-        showHitPop(`🎯 ${activePlayer.name}: +${hitPoints}点!`);
+        showHitPop(`🎯 ${activePlayer.name}: +${hitPoints}点!`, "hit");
         addHistoryItem(`🎯 <b>${activePlayer.name}</b> (${activePlayer.shotsTaken}投目): +${hitPoints}点`, "normal");
 
         updateUIBoard();
@@ -613,7 +621,7 @@
       activePlayer.shotsTaken++;
       gameState.shotsLeft--;
 
-      showHitPop(`💨 ${activePlayer.name}: MISS (0点)`, true);
+      showHitPop(`💨 ${activePlayer.name}: MISS (0点)`, "miss");
       addHistoryItem(`💨 <b>${activePlayer.name}</b> (${activePlayer.shotsTaken}投目): MISS (0点)`, "normal");
 
       updateUIBoard();
@@ -623,13 +631,10 @@
       }
     }
 
-    // 5投終了時の判定（スコア計算・延長戦・ゲームセット・交代）
     function checkRoundCompletion() {
       gameState.completedTurns++; 
 
       if (gameState.mode === "SHOTS10") {
-        // 各自2ターン（5発×2＝計10発）を終えたか判定
-        // 参加人数 × 2 ターン数に達したら全員10発終了
         const targetTotalTurns = gameState.players.length * 2;
         if (gameState.completedTurns >= targetTotalTurns) {
           triggerGameOver();
@@ -652,7 +657,7 @@
             } else {
               gameState.isExtraRound = true;
               const topNames = topPlayers.map(p => p.name).join("と");
-              showHitPop("🔥 同点！延長戦に突入！");
+              showHitPop("🔥 同点！延長戦に突入！", "hit");
               addHistoryItem(`🔥 500点到達も同点 (${maxScore}点: ${topNames})！延長戦(各5発)へ！`, "extra-round");
             }
           }
@@ -662,7 +667,6 @@
       prepareForNextTurn();
     }
 
-    // 🎉 ゲームセット共通処理
     function triggerGameOver(winnerNameParam = null, winScoreParam = null) {
       playRealBuzzer(0.8, true);
 
@@ -688,13 +692,12 @@
         maxScore = maxVal;
       }
 
-      showHitPop(`🎉 勝者: ${winnerText}!`);
+      showHitPop(`🎉 ゲーム終了！ 勝者: ${winnerText}!`, "hit");
       addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b> (${maxScore}点)`, "game-end");
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("missBtn").style.display = "none";
     }
 
-    // 🔄 5球投球完了時に交代表示をセットアップ
     function prepareForNextTurn() {
       gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
       gameState.shotsLeft = 5;
@@ -708,7 +711,6 @@
       addHistoryItem(`⏸️ 5発達成！ <b>${nextPlayerName}</b> の交代準備完了`, "round-end");
     }
 
-    // ▶️ 次のプレイヤーがボタンを押してカウントダウン開始
     function startNextTurnCountdown() {
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("missBtn").style.display = "flex";
