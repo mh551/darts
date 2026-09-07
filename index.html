@@ -3,629 +3,385 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ダーツターゲットコントローラー</title>
+  <title>ダーツボード コントローラー</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding: 12px;
-      background-color: #f0f2f5;
-      color: #333;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #1a1a2e;
+      color: #fff;
       margin: 0;
-    }
-    .card {
-      background: white;
-      padding: 15px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      margin-bottom: 12px;
-    }
-    h2 { margin-top: 0; color: #1a73e8; font-size: 1.1rem; }
-    .btn {
-      background-color: #007aff;
-      color: white;
-      border: none;
-      padding: 14px 16px;
-      font-size: 18px;
-      font-weight: bold;
-      border-radius: 8px;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 5px;
-    }
-    .btn:active { background-color: #0056b3; }
-    .btn-secondary { background-color: #8e8e93; }
-    .btn-warning { background-color: #ff9500; }
-    .radio-group { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
-    .radio-label { display: flex; align-items: center; font-size: 15px; cursor: pointer; }
-    .radio-label input { margin-right: 8px; transform: scale(1.2); }
-    .desc-box {
-      background-color: #eef3fc;
-      border-left: 4px solid #007aff;
-      padding: 10px 12px;
-      font-size: 13px;
-      line-height: 1.5;
-      border-radius: 4px;
-      margin-top: 10px;
-    }
-    input[type="text"], input[type="number"], select {
-      font-size: 16px;
-      padding: 6px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
-    .player-inputs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .player-row { display: flex; align-items: center; gap: 10px; }
-
-    /* ⏱️ 全画面カウントダウン */
-    #countdownOverlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.95);
-      color: #ff3b30;
-      font-size: 80px;
-      font-weight: 900;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      z-index: 9999;
-      letter-spacing: 2px;
-      text-align: center;
-    }
-    #countPlayerTitle {
-      font-size: 28px;
-      color: #34c759;
-      margin-bottom: 20px;
-    }
-
-    /* 🎯 プレイ画面 */
-    #gameScreen { display: none; }
-    .score-board {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .player-card {
-      background: #f8f9fa;
-      border: 3px solid #ddd;
-      border-radius: 12px;
-      padding: 10px 6px;
-      text-align: center;
-      transition: all 0.3s ease;
-    }
-    .player-card.active {
-      border-color: #007aff;
-      background: #eef6ff;
-      box-shadow: 0 0 12px rgba(0, 122, 255, 0.4);
-      transform: scale(1.02);
-    }
-    .p-name { font-size: 1rem; font-weight: bold; color: #333; margin-bottom: 4px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    .p-score { font-size: 1.8rem; font-weight: bold; color: #1a73e8; margin: 4px 0; }
-    .p-sub { font-size: 0.75rem; color: #666; }
-
-    .game-status-bar {
-      background: #333;
-      color: white;
-      padding: 10px;
-      border-radius: 8px;
-      text-align: center;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-
-    .hit-pop {
-      background: #ffcc00;
-      color: #000;
-      font-size: 1.4rem;
-      font-weight: bold;
-      text-align: center;
-      padding: 10px;
-      border-radius: 8px;
-      margin: 10px 0;
-      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    @keyframes popIn {
-      0% { transform: scale(0.7); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .change-turn-box {
-      background: #fff3cd;
-      border: 2px solid #ffeba2;
-      border-radius: 12px;
-      padding: 15px;
-      text-align: center;
-      margin: 10px 0;
-    }
-
-    .history-list {
-      list-style: none; padding: 0; margin: 0;
-      max-height: 180px; overflow-y: auto;
-      border: 1px solid #ddd; border-radius: 8px; background: #fafafa;
-    }
-    .history-item {
-      padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .history-item.round-end { background-color: #e3f2fd; font-weight: bold; color: #0d47a1; }
-    .history-item.game-end { background-color: #e8f5e9; font-weight: bold; color: #1b5e20; }
-
-    .action-buttons {
+      padding: 20px;
       display: flex;
       flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #e94560;
+      margin-bottom: 10px;
+    }
+    .status-panel {
+      background-color: #16213e;
+      padding: 15px 25px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ff4d4d;
+    }
+    .status-indicator.connected {
+      background-color: #00ff88;
+    }
+    button {
+      background-color: #0f3460;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:hover {
+      background-color: #e94560;
+    }
+    .settings-panel {
+      background-color: #16213e;
+      padding: 20px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 450px;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: #a0a0a0;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #0f3460;
+      background-color: #1a1a2e;
+      color: white;
+      box-sizing: border-box;
+    }
+    .game-board {
+      background-color: #16213e;
+      padding: 20px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 450px;
+      text-align: center;
+    }
+    .score-display {
+      font-size: 48px;
+      font-weight: bold;
+      color: #00ff88;
+      margin: 10px 0;
+    }
+    .shots-container {
+      display: flex;
+      justify-content: center;
       gap: 10px;
+      margin: 15px 0;
+    }
+    .shot-box {
+      width: 45px;
+      height: 45px;
+      line-height: 45px;
+      background-color: #0f3460;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .scoreboard {
+      width: 100%;
+      border-collapse: collapse;
       margin-top: 15px;
+    }
+    .scoreboard th, .scoreboard td {
+      border: 1px solid #0f3460;
+      padding: 8px;
+      text-align: center;
+    }
+    .scoreboard th {
+      background-color: #0f3460;
+    }
+    .active-player {
+      background-color: rgba(233, 69, 96, 0.3);
     }
   </style>
 </head>
 <body>
 
-  <div id="countdownOverlay">
-    <div id="countPlayerTitle">Next Player</div>
-    <div id="countNum">3</div>
+  <h1>Darts Target Controller</h1>
+
+  <div class="status-panel">
+    <div id="statusIndicator" class="status-indicator"></div>
+    <span id="statusText">未接続</span>
+    <button id="connectBtn">ESP32に接続</button>
   </div>
 
-  <!-- 1. 設定画面 -->
-  <div id="setupScreen">
-    <h1>🎯 ダーツボード設定</h1>
-
-    <div class="card">
-      <h2>1. ESP32接続</h2>
-      <button class="btn" onclick="connectBLE()">Bluetooth 接続開始</button>
-      <p id="status" style="margin-top:8px; font-weight:bold; color:red;">未接続</p>
+  <div class="settings-panel">
+    <div class="form-group">
+      <label for="gameMode">ゲームモード</label>
+      <select id="gameMode">
+        <option value="SHOTS10">10発勝負 (2人プレイ)</option>
+        <option value="COUNTUP">カウントアップ (8ラウンド)</option>
+        <option value="VS10">10ラウンド対戦 (2人対戦)</option>
+      </select>
     </div>
-
-    <div class="card">
-      <h2>2. プレイヤー登録</h2>
-      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-        <label style="font-weight:bold;">人数選択:</label>
-        <select id="playerCountSelect" onchange="renderPlayerInputs()">
-          <option value="1">1人</option>
-          <option value="2" selected>2人</option>
-          <option value="3">3人</option>
-          <option value="4">4人</option>
-          <option value="5">5人</option>
-        </select>
-      </div>
-      <div class="player-inputs" id="playerInputsContainer"></div>
+    <div class="form-group">
+      <label for="bullScore">BULL点数</label>
+      <select id="bullScore">
+        <option value="50">50点 (FAT BULL)</option>
+        <option value="25">25点 (SEPARATE BULL)</option>
+      </select>
     </div>
-
-    <div class="card">
-      <h2>3. ゲームモード選択</h2>
-      <div class="radio-group">
-        <label class="radio-label">
-          <input type="radio" name="gameMode" value="SHOTS10" checked onchange="updateModeDescription()">
-          モード1: 10発勝負 (各自5発/全10発)
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="gameMode" value="COUNTUP" onchange="updateModeDescription()">
-          モード2: カウントアップ500 (先攻/後攻平等ルール)
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="gameMode" value="VS10" onchange="updateModeDescription()">
-          モード3: 10ラウンド対戦 (勝ち点制)
-        </label>
-      </div>
-      <div id="modeDescription" class="desc-box"></div>
+    <div class="form-group">
+      <label for="p1Name">プレイヤー 1 名前</label>
+      <input type="text" id="p1Name" value="Player 1">
     </div>
-
-    <div class="card">
-      <h2>4. 中央 (BULL) の点数設定</h2>
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <input type="number" id="bullScoreInput" value="50" min="0" max="500" style="width:80px;"> 点
-      </div>
+    <div class="form-group" id="p2Group">
+      <label for="p2Name">プレイヤー 2 名前</label>
+      <input type="text" id="p2Name" value="Player 2">
     </div>
-
-    <div class="card">
-      <button class="btn" style="background-color: #34c759;" onclick="startWithCountdown(true)">ゲームスタート！</button>
-    </div>
+    <button id="startBtn" style="width: 100%; margin-top: 10px;">ゲームスタート</button>
   </div>
 
-  <!-- 2. ゲームプレイ画面 -->
-  <div id="gameScreen">
-    <div class="game-status-bar">
-      <span id="displayModeTitle">モード名</span> | <span id="displayRoundInfo">第 1 ラウンド (残り 5/5球)</span>
+  <div class="game-board">
+    <h2 id="turnInfo">ゲームを開始してください</h2>
+    <div id="totalScoreDisplay" class="score-display">0</div>
+
+    <div class="shots-container">
+      <div id="shot1" class="shot-box">-</div>
+      <div id="shot2" class="shot-box">-</div>
+      <div id="shot3" class="shot-box">-</div>
+      <div id="shot4" class="shot-box">-</div>
+      <div id="shot5" class="shot-box">-</div>
     </div>
 
-    <div class="score-board" id="scoreBoardContainer"></div>
-
-    <div id="hitPop" class="hit-pop" style="display:none;">🎯 命中！ +50点</div>
-
-    <div id="turnStartBox" class="change-turn-box" style="display:none;">
-      <p style="margin: 0 0 8px 0; font-weight: bold; font-size: 1.1rem;" id="nextPlayerAlert">次は Player2 のターンです</p>
-      <button class="btn btn-warning" onclick="startNextTurnCountdown()">▶️ 準備完了！スタート</button>
-    </div>
-
-    <div class="card" style="margin-top: 12px;">
-      <h2 style="margin-bottom: 8px;">📊 投球ログ</h2>
-      <ul id="historyList" class="history-list">
-        <li class="history-item" style="color: #888;">投球データ待機中...</li>
-      </ul>
-    </div>
-
-    <div class="action-buttons">
-      <button id="manualTurnBtn" class="btn btn-warning" onclick="forceChangeTurn()">🔄 手動で交代する</button>
-      <button class="btn btn-secondary" onclick="exitGame()">設定画面へ戻る</button>
-    </div>
+    <table class="scoreboard" id="scoreTable">
+      <thead>
+        <tr>
+          <th>プレイヤー</th>
+          <th>合計スコア</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr id="rowP1">
+          <td id="nameDisplayP1">Player 1</td>
+          <td id="scoreDisplayP1">0</td>
+        </tr>
+        <tr id="rowP2">
+          <td id="nameDisplayP2">Player 2</td>
+          <td id="scoreDisplayP2">0</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <script>
-    const SERVICE_UUID        = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-    let bluetoothDevice, characteristic;
-    let audioCtx = null;
+    let bleDevice;
+    let bleCharacteristic;
 
     let gameState = {
-      players: [],
-      currentTurnIdx: 0,
-      currentRound: 1,
-      shotsLeft: 5,
       mode: "SHOTS10",
-      isGameOver: false,
-      pTotalShots: []
+      bull: 50,
+      currentPlayer: 1,
+      currentRound: 1,
+      shotsInTurn: 0,
+      scores: { p1: 0, p2: 0 },
+      turnScores: []
     };
 
-    const modeDescriptions = {
-      "SHOTS10": "<b>【10発勝負】</b><br>各自合計10発（2ラウンド）投げた合計スコアを競います。",
-      "COUNTUP": "<b>【カウントアップ 500】</b><br>500点到達を目指します。全員が毎ラウンド5発ずつ投げ、ラウンド終了時に判定します。",
-      "VS10": "<b>【10ラウンド対戦】</b><br>1ラウンド（各5発）ごとに最高スコアを出した人に「1勝」が入ります。全10ラウンドでの勝ち数を競います。"
-    };
+    const connectBtn = document.getElementById('connectBtn');
+    const startBtn = document.getElementById('startBtn');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
 
-    const modeNames = {
-      "SHOTS10": "10発勝負",
-      "COUNTUP": "カウントアップ 500",
-      "VS10": "10ラウンド対戦"
-    };
-
-    window.onload = function() {
-      renderPlayerInputs();
-      updateModeDescription();
-    };
-
-    function renderPlayerInputs() {
-      const count = parseInt(document.getElementById("playerCountSelect").value, 10);
-      const container = document.getElementById("playerInputsContainer");
-      container.innerHTML = "";
-      for (let i = 1; i <= count; i++) {
-        container.innerHTML += `
-          <div class="player-row">
-            <label style="width: 80px; font-weight:bold;">P${i}名前:</label>
-            <input type="text" id="p${i}Name" value="Player${i}" style="flex:1;">
-          </div>`;
-      }
-    }
-
-    function playRealBuzzer(duration, isLong = false) {
+    connectBtn.addEventListener('click', async () => {
       try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const now = audioCtx.currentTime;
-        const freqs = isLong ? [120, 243, 365, 487] : [150, 305, 460];
-        freqs.forEach((freq) => {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.type = (freq % 2 === 0) ? 'square' : 'sawtooth';
-          osc.frequency.setValueAtTime(freq, now);
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          gain.gain.setValueAtTime(0.4, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-          osc.start(now);
-          osc.stop(now + duration);
-        });
-      } catch (e) {}
-    }
-
-    function updateModeDescription() {
-      const selectedMode = document.querySelector('input[name="gameMode"]:checked').value;
-      document.getElementById("modeDescription").innerHTML = modeDescriptions[selectedMode];
-    }
-
-    async function connectBLE() {
-      try {
-        bluetoothDevice = await navigator.bluetooth.requestDevice({
+        statusText.innerText = "接続中...";
+        bleDevice = await navigator.bluetooth.requestDevice({
           filters: [{ name: 'DartsTarget_ESP32' }],
           optionalServices: [SERVICE_UUID]
         });
-        const server = await bluetoothDevice.gatt.connect();
+
+        const server = await bleDevice.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
-        characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-        await characteristic.startNotifications();
-        characteristic.addEventListener('characteristicvaluechanged', handleNotify);
-        document.getElementById("status").innerText = "接続完了！";
-        document.getElementById("status").style.color = "green";
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        await bleCharacteristic.startNotifications();
+        bleCharacteristic.addEventListener('characteristicvaluechanged', handleData);
+
+        statusIndicator.classList.add('connected');
+        statusText.innerText = "接続完了";
+        connectBtn.style.display = "none";
       } catch (error) {
-        alert("接続エラー: " + error);
+        console.error(error);
+        statusText.innerText = "接続失敗";
       }
-    }
+    });
 
-    function startWithCountdown(isInitialStart = false, callback = null) {
-      if (isInitialStart && !characteristic) {
-        alert("先にBluetooth接続を行ってください。");
+    startBtn.addEventListener('click', async () => {
+      if (!bleCharacteristic) {
+        alert("ESP32に接続してください");
         return;
       }
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.resume();
 
-      const overlay = document.getElementById("countdownOverlay");
-      const countNum = document.getElementById("countNum");
-      const title = document.getElementById("countPlayerTitle");
-
-      let nextPlayerName = isInitialStart ? 
-        (document.getElementById("p1Name")?.value.trim() || "Player1") : 
-        gameState.players[gameState.currentTurnIdx].name;
-
-      title.innerText = isInitialStart ? `🎯 ${nextPlayerName} のターン` : `🔄 交代: ${nextPlayerName} のターン`;
-      overlay.style.display = "flex";
-
-      let count = 3;
-      countNum.innerText = count;
-      playRealBuzzer(0.2, false);
-
-      const timer = setInterval(() => {
-        count--;
-        if (count > 0) {
-          countNum.innerText = count;
-          playRealBuzzer(0.2, false);
-        } else if (count === 0) {
-          countNum.innerText = "START!";
-          playRealBuzzer(0.9, true);
-        } else {
-          clearInterval(timer);
-          overlay.style.display = "none";
-          if (isInitialStart) {
-            document.getElementById("setupScreen").style.display = "none";
-            document.getElementById("gameScreen").style.display = "block";
-            applyAndStart();
-          } else if (callback) {
-            callback();
-          }
-        }
-      }, 1000);
-    }
-
-    async function applyAndStart() {
-      const count = parseInt(document.getElementById("playerCountSelect").value, 10);
-      gameState.players = [];
-      gameState.pTotalShots = [];
-
-      for (let i = 1; i <= count; i++) {
-        const nameVal = document.getElementById(`p${i}Name`)?.value.trim() || `Player${i}`;
-        gameState.players.push({ 
-          name: nameVal, 
-          score: 0,       // 累計点数（またはモード3の現ラウンド点数）
-          wins: 0         // モード3用の勝ち数
-        });
-        gameState.pTotalShots.push(0);
-      }
-
-      gameState.mode = document.querySelector('input[name="gameMode"]:checked').value;
-      const bullPoints = document.getElementById("bullScoreInput").value;
-
-      gameState.currentTurnIdx = 0;
+      gameState.mode = document.getElementById('gameMode').value;
+      gameState.bull = parseInt(document.getElementById('bullScore').value);
+      gameState.currentPlayer = 1;
       gameState.currentRound = 1;
-      gameState.shotsLeft = 5;
-      gameState.isGameOver = false;
+      gameState.shotsInTurn = 0;
+      gameState.scores.p1 = 0;
+      gameState.scores.p2 = 0;
+      gameState.turnScores = [];
 
-      document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "block";
+      document.getElementById('nameDisplayP1').innerText = document.getElementById('p1Name').value;
+      document.getElementById('nameDisplayP2').innerText = document.getElementById('p2Name').value;
+      document.getElementById('scoreDisplayP1').innerText = "0";
+      document.getElementById('scoreDisplayP2').innerText = "0";
 
-      initUIBoard();
-      updateUIBoard();
-      clearHistory();
+      await sendCommand(`SET_MODE:${gameState.mode}`);
+      await sendCommand(`SET_BULL:${gameState.bull}`);
+      await sendCommand("SHOT_START");
 
-      const encoder = new TextEncoder();
-      try {
-        await characteristic.writeValue(encoder.encode("SET_MODE:" + gameState.mode));
-        await characteristic.writeValue(encoder.encode("SET_BULL:" + bullPoints));
-        await characteristic.writeValue(encoder.encode("SHOT_START"));
-        addHistoryItem(`ゲーム開始 [${modeNames[gameState.mode]}] - 人数: ${count}人`, "round-end");
-      } catch (err) {}
-    }
+      resetShotsUI();
+      updateTurnUI();
+    });
 
-    function initUIBoard() {
-      const container = document.getElementById("scoreBoardContainer");
-      container.innerHTML = "";
-      gameState.players.forEach((p, idx) => {
-        container.innerHTML += `
-          <div id="pCard_${idx}" class="player-card ${idx === 0 ? 'active' : ''}">
-            <div class="p-name">${p.name}</div>
-            <div class="p-score" id="pScore_${idx}">0</div>
-            <div class="p-sub" id="pSub_${idx}">累計スコア</div>
-          </div>`;
-      });
-    }
-
-    function updateUIBoard() {
-      document.getElementById("displayModeTitle").innerText = modeNames[gameState.mode];
-      document.getElementById("displayRoundInfo").innerText = `第 ${gameState.currentRound} R (残り ${gameState.shotsLeft}/5球)`;
-
-      gameState.players.forEach((p, idx) => {
-        const card = document.getElementById(`pCard_${idx}`);
-        const scoreElem = document.getElementById(`pScore_${idx}`);
-        const subElem = document.getElementById(`pSub_${idx}`);
-
-        if (card) {
-          if (idx === gameState.currentTurnIdx) card.classList.add("active");
-          else card.classList.remove("active");
-        }
-
-        if (gameState.mode === "VS10") {
-          if (scoreElem) scoreElem.innerText = p.wins + "勝";
-          if (subElem) subElem.innerText = `(現R: ${p.score}点)`;
-        } else {
-          if (scoreElem) scoreElem.innerText = p.score;
-          if (subElem) subElem.innerText = "累計スコア";
-        }
-      });
-    }
-
-    function showHitPop(text) {
-      const pop = document.getElementById("hitPop");
-      pop.innerText = text;
-      pop.style.display = "block";
-      setTimeout(() => { pop.style.display = "none"; }, 1500);
-    }
-
-    function handleNotify(event) {
-      if (gameState.isGameOver) return;
-      const value = new TextDecoder().decode(event.target.value).trim();
-
-      if (value.startsWith("GAME_OVER")) return;
-
-      if (value === "ROUND_CLEAR") {
-        prepareForNextTurn(false);
-        return;
+    async function sendCommand(cmd) {
+      if (bleCharacteristic) {
+        const encoder = new TextEncoder();
+        await bleCharacteristic.writeValue(encoder.encode(cmd));
       }
+    }
+
+    function handleData(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      console.log("Received:", value);
 
       if (value.startsWith("HIT:")) {
-        const hitPoints = parseInt(value.replace("HIT:", ""), 10) || 0;
-        const activePlayer = gameState.players[gameState.currentTurnIdx];
-        
-        activePlayer.score += hitPoints;
-        gameState.pTotalShots[gameState.currentTurnIdx]++;
-        gameState.shotsLeft--;
-
-        showHitPop(`🎯 ${activePlayer.name}: +${hitPoints}点!`);
-        addHistoryItem(`🎯 <b>${activePlayer.name}</b>: +${hitPoints}点`, "normal");
-
-        updateUIBoard();
+        const points = parseInt(value.split(":")[1]);
+        recordHit(points);
+      } else if (value === "ROUND_CLEAR") {
+        setTimeout(handleRoundClear, 500);
+      } else if (value === "GAME_OVER") {
+        setTimeout(handleGameOver, 500);
       }
     }
 
-    function prepareForNextTurn(isManual = false) {
-      const nextIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
+    function recordHit(points) {
+      if (gameState.shotsInTurn < 5) {
+        gameState.shotsInTurn++;
+        gameState.turnScores.push(points);
 
-      // 1ラウンド完了（全員が5発投げ切ったタイミング）
-      if (nextIdx === 0) {
-        
-        // ---------------- モード3: 10ラウンド対戦の判定 ----------------
-        if (gameState.mode === "VS10") {
-          let maxScore = -1;
-          let roundWinners = [];
+        document.getElementById(`shot${gameState.shotsInTurn}`).innerText = points;
 
-          gameState.players.forEach(p => {
-            if (p.score > maxScore) {
-              maxScore = p.score;
-              roundWinners = [p];
-            } else if (p.score === maxScore && maxScore > 0) {
-              roundWinners.push(p);
-            }
-          });
+        if (gameState.currentPlayer === 1) {
+          gameState.scores.p1 += points;
+          document.getElementById('scoreDisplayP1').innerText = gameState.scores.p1;
+          document.getElementById('totalScoreDisplay').innerText = gameState.scores.p1;
+        } else {
+          gameState.scores.p2 += points;
+          document.getElementById('scoreDisplayP2').innerText = gameState.scores.p2;
+          document.getElementById('totalScoreDisplay').innerText = gameState.scores.p2;
+        }
+      }
+    }
 
-          if (roundWinners.length === 1) {
-            roundWinners[0].wins++;
-            addHistoryItem(`🏆 第${gameState.currentRound}R 勝利: <b>${roundWinners[0].name}</b> (${maxScore}点)`, "round-end");
-          } else {
-            addHistoryItem(`🤝 第${gameState.currentRound}R 引き分け (${maxScore}点)`, "round-end");
-          }
-
-          // 次のラウンドへ向けて各プレイヤーの「ラウンド内得点」をリセット
-          gameState.players.forEach(p => p.score = 0);
-
-          if (gameState.currentRound >= 10) {
-            triggerGameOver();
+    function handleRoundClear() {
+      if (gameState.mode === "SHOTS10") {
+        gameState.currentPlayer = 2;
+        alert(`${document.getElementById('p2Name').value} の順番です！`);
+      } else if (gameState.mode === "VS10") {
+        if (gameState.currentPlayer === 1) {
+          gameState.currentPlayer = 2;
+          alert(`ラウンド ${gameState.currentRound} : ${document.getElementById('p2Name').value} の順番です！`);
+        } else {
+          gameState.currentPlayer = 1;
+          gameState.currentRound++;
+          if (gameState.currentRound > 10) {
+            handleGameOver();
             return;
           }
+          alert(`ラウンド ${gameState.currentRound} : ${document.getElementById('p1Name').value} の順番です！`);
         }
-
-        // ---------------- モード1: 10発勝負の判定 ----------------
-        if (gameState.mode === "SHOTS10" && gameState.pTotalShots.every(s => s >= 10)) {
-          triggerGameOver();
+      } else if (gameState.mode === "COUNTUP") {
+        gameState.currentRound++;
+        if (gameState.currentRound > 8) {
+          handleGameOver();
           return;
         }
-
-        // ---------------- モード2: カウントアップ500の判定 ----------------
-        if (gameState.mode === "COUNTUP") {
-          const winners = gameState.players.filter(p => p.score >= 500);
-          if (winners.length > 0) {
-            triggerGameOver();
-            return;
-          }
-        }
-
-        gameState.currentRound++;
+        alert(`ラウンド ${gameState.currentRound} 開始！`);
       }
 
-      gameState.currentTurnIdx = nextIdx;
-      gameState.shotsLeft = 5;
-
-      const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
-      document.getElementById("nextPlayerAlert").innerText = `次は ${nextPlayerName} のターンです`;
-      document.getElementById("turnStartBox").style.display = "block";
-      document.getElementById("manualTurnBtn").style.display = "none";
-
-      const logText = isManual ? `🔄 [手動交代] <b>${nextPlayerName}</b> の準備待ち` : `⏸️ 5発達成！ <b>${nextPlayerName}</b> の準備待ち`;
-      addHistoryItem(logText, "round-end");
+      resetShotsUI();
+      updateTurnUI();
+      sendCommand("NEXT_ROUND");
     }
 
-    function triggerGameOver() {
-      gameState.isGameOver = true;
-      playRealBuzzer(0.8, true);
+    function handleGameOver() {
+      let msg = "ゲーム終了！\n";
+      const p1 = document.getElementById('p1Name').value;
+      const p2 = document.getElementById('p2Name').value;
 
-      let maxVal = -1;
-      let winners = [];
-
-      gameState.players.forEach(p => {
-        const val = (gameState.mode === "VS10") ? p.wins : p.score;
-        if (val > maxVal) {
-          maxVal = val;
-          winners = [p.name];
-        } else if (val === maxVal) {
-          winners.push(p.name);
+      if (gameState.mode === "COUNTUP") {
+        msg += `最終スコア: ${gameState.scores.p1} 点`;
+      } else {
+        msg += `${p1}: ${gameState.scores.p1} 点\n${p2}: ${gameState.scores.p2} 点\n\n`;
+        if (gameState.scores.p1 > gameState.scores.p2) {
+          msg += `勝者: ${p1}！`;
+        } else if (gameState.scores.p2 > gameState.scores.p1) {
+          msg += `勝者: ${p2}！`;
+        } else {
+          msg += "引き分け！";
         }
-      });
+      }
 
-      const unit = (gameState.mode === "VS10") ? "勝" : "点";
-      const winnerText = winners.length === 1 ? winners[0] : `引き分け (${winners.join(", ")})`;
-      
-      showHitPop(`🎉 勝者: ${winnerText}!`);
-      addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText} (${maxVal}${unit})</b>`, "game-end");
-
-      document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "none";
+      alert(msg);
+      document.getElementById('turnInfo').innerText = "ゲーム終了";
     }
 
-    function forceChangeTurn() {
-      if (confirm("現在のターンを終了して次のプレイヤーへ交代しますか？")) {
-        prepareForNextTurn(true);
+    function resetShotsUI() {
+      gameState.shotsInTurn = 0;
+      gameState.turnScores = [];
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById(`shot${i}`).innerText = "-";
       }
     }
 
-    function startNextTurnCountdown() {
-      document.getElementById("turnStartBox").style.display = "none";
-      document.getElementById("manualTurnBtn").style.display = "block";
+    function updateTurnUI() {
+      const p1 = document.getElementById('p1Name').value;
+      const p2 = document.getElementById('p2Name').value;
 
-      const nextPlayerName = gameState.players[gameState.currentTurnIdx].name;
-      startWithCountdown(false, async () => {
-        updateUIBoard();
-        addHistoryItem(`▶️ ターン開始: <b>${nextPlayerName}</b>`, "round-end");
-        if (characteristic) {
-          try {
-            await characteristic.writeValue(new TextEncoder().encode("NEXT_ROUND"));
-          } catch (e) {}
-        }
-      });
-    }
-
-    function addHistoryItem(text, type = "normal") {
-      const list = document.getElementById("historyList");
-      if (list.children.length === 1 && list.children[0].style.color !== "") list.innerHTML = "";
-      const li = document.createElement("li");
-      li.className = "history-item " + type;
-      li.innerHTML = `<span>${text}</span>`;
-      list.insertBefore(li, list.firstChild);
-    }
-
-    function clearHistory() {
-      document.getElementById("historyList").innerHTML = '<li class="history-item" style="color: #888;">投球データ待機中...</li>';
-    }
-
-    function exitGame() {
-      document.getElementById("gameScreen").style.display = "none";
-      document.getElementById("setupScreen").style.display = "block";
+      if (gameState.currentPlayer === 1) {
+        document.getElementById('turnInfo').innerText = `${p1} のターン (Round ${gameState.currentRound})`;
+        document.getElementById('rowP1').classList.add('active-player');
+        document.getElementById('rowP2').classList.remove('active-player');
+        document.getElementById('totalScoreDisplay').innerText = gameState.scores.p1;
+      } else {
+        document.getElementById('turnInfo').innerText = `${p2} のターン (Round ${gameState.currentRound})`;
+        document.getElementById('rowP2').classList.add('active-player');
+        document.getElementById('rowP1').classList.remove('active-player');
+        document.getElementById('totalScoreDisplay').innerText = gameState.scores.p2;
+      }
     }
   </script>
 </body>
