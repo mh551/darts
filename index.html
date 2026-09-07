@@ -152,13 +152,11 @@
       border: 2px solid #ced4da;
       transition: all 0.2s ease;
     }
-    /* 🎯 HIT時（黄色で強調固定） */
     .hit-pop.hit-style {
       background: #fff3cd;
       color: #856404;
       border-color: #ffeeba;
     }
-    /* 💨 MISS時（グレーで強調固定） */
     .hit-pop.miss-style {
       background: #e2e3e5;
       color: #383d41;
@@ -316,7 +314,8 @@
       shotsLeft: 5,
       mode: "SHOTS10",
       isExtraRound: false,
-      completedTurns: 0
+      completedTurns: 0,
+      vsCurrentRound: 1  // モード3(VS10)の現在のラウンド数
     };
 
     const modeDescriptions = {
@@ -352,10 +351,13 @@
       }
     }
 
+    // 🔊 ブザー音再生（確実に再生するようにAudioContextの復帰処理を強化）
     function playRealBuzzer(duration, isLong = false) {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
 
         const now = audioCtx.currentTime;
         const freqs = isLong ? [120, 243, 365, 487] : [150, 305, 460];
@@ -470,7 +472,8 @@
           name: nameVal || `Player${i}`,
           score: 0,
           wins: 0,
-          shotsTaken: 0
+          shotsTaken: 0,
+          roundScore: 0 // VS10モードで1ラウンド毎の得点を保持
         });
       }
 
@@ -480,6 +483,7 @@
       gameState.currentTurnIdx = 0;
       gameState.shotsLeft = 5;
       gameState.completedTurns = 0;
+      gameState.vsCurrentRound = 1;
       gameState.isExtraRound = false;
 
       document.getElementById("turnStartBox").style.display = "none";
@@ -520,7 +524,11 @@
 
     function updateUIBoard() {
       let titleText = modeNames[gameState.mode];
-      if (gameState.isExtraRound) titleText += " (延長戦)";
+      if (gameState.mode === "VS10") {
+        titleText += ` (Rd.${gameState.vsCurrentRound}/10)`;
+      } else if (gameState.isExtraRound) {
+        titleText += " (延長戦)";
+      }
       document.getElementById("displayModeTitle").innerText = titleText;
       document.getElementById("displayRoundInfo").innerText = `残り ${gameState.shotsLeft}/5球`;
 
@@ -539,7 +547,7 @@
 
         if (gameState.mode === "VS10") {
           if (scoreElem) scoreElem.innerText = p.wins + "勝";
-          if (subElem) subElem.innerText = `(現: ${p.score}点)`;
+          if (subElem) subElem.innerText = `(現Rd: ${p.roundScore}点)`;
         } else if (gameState.mode === "SHOTS10") {
           if (scoreElem) scoreElem.innerText = p.score;
           if (subElem) subElem.innerText = `投球数: ${p.shotsTaken} / 10`;
@@ -550,18 +558,19 @@
       });
     }
 
-    // 📌 消えない判定表示（常時固定）
+    // 📌 固定判定表示＋効果音再生
     function showHitPop(text, type = "hit") {
       const pop = document.getElementById("hitPop");
       pop.innerText = text;
 
-      // 一旦クラスをクリア
       pop.classList.remove("hit-style", "miss-style");
 
       if (type === "hit") {
         pop.classList.add("hit-style");
+        playRealBuzzer(0.15, false); // 命中時にブザー
       } else if (type === "miss") {
         pop.classList.add("miss-style");
+        playRealBuzzer(0.3, true);   // MISS時に低音ブザー
       }
     }
 
@@ -588,6 +597,7 @@
 
         const activePlayer = gameState.players[gameState.currentTurnIdx];
         activePlayer.score += hitPoints;
+        activePlayer.roundScore += hitPoints;
         activePlayer.shotsTaken++;
         gameState.shotsLeft--;
 
@@ -604,11 +614,6 @@
 
       if (value.includes("ROUND_CLEAR") && gameState.shotsLeft <= 0) {
         checkRoundCompletion();
-        return;
-      }
-
-      if (value.includes("VS_ROUND_RESULT")) {
-        updateUIBoard();
         return;
       }
     }
@@ -631,10 +636,25 @@
       }
     }
 
+    // ターン／ラウンド終了判定
     function checkRoundCompletion() {
       gameState.completedTurns++; 
 
-      if (gameState.mode === "SHOTS10") {
+      if (gameState.mode === "VS10") {
+        // 全員がそのラウンドで5投完了したか確認
+        const isLastPlayerOfRound = (gameState.currentTurnIdx === gameState.players.length - 1);
+        if (isLastPlayerOfRound) {
+          // 🏆 1ラウンドの勝者を判定して勝利数(+1)を増やす
+          evaluateVsRoundWinner();
+
+          if (gameState.vsCurrentRound >= 10) {
+            triggerGameOver();
+            return;
+          } else {
+            gameState.vsCurrentRound++;
+          }
+        }
+      } else if (gameState.mode === "SHOTS10") {
         const targetTotalTurns = gameState.players.length * 2;
         if (gameState.completedTurns >= targetTotalTurns) {
           triggerGameOver();
@@ -667,6 +687,32 @@
       prepareForNextTurn();
     }
 
+    // 🏆 モード3(10ラウンド対戦)の各ラウンド勝者決定＆勝利数加算処理
+    function evaluateVsRoundWinner() {
+      let maxRoundScore = -1;
+      gameState.players.forEach(p => {
+        if (p.roundScore > maxRoundScore) {
+          maxRoundScore = p.roundScore;
+        }
+      });
+
+      const roundWinners = gameState.players.filter(p => p.roundScore === maxRoundScore);
+
+      if (roundWinners.length === 1) {
+        roundWinners[0].wins += 1;
+        addHistoryItem(`🏆 <b>Rd.${gameState.vsCurrentRound} 勝者: ${roundWinners[0].name}</b> (${maxRoundScore}点) 勝利数+1`, "extra-round");
+      } else {
+        const drawNames = roundWinners.map(p => p.name).join(", ");
+        addHistoryItem(`🤝 <b>Rd.${gameState.vsCurrentRound} 引き分け</b> (${drawNames}: ${maxRoundScore}点)`, "extra-round");
+      }
+
+      // 次のラウンドへ向けて各人のラウンド得点をリセット
+      gameState.players.forEach(p => {
+        p.roundScore = 0;
+      });
+    }
+
+    // 🎉 ゲームセット共通処理
     function triggerGameOver(winnerNameParam = null, winScoreParam = null) {
       playRealBuzzer(0.8, true);
 
@@ -692,8 +738,9 @@
         maxScore = maxVal;
       }
 
+      const unitText = (gameState.mode === "VS10") ? "勝" : "点";
       showHitPop(`🎉 ゲーム終了！ 勝者: ${winnerText}!`, "hit");
-      addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b> (${maxScore}点)`, "game-end");
+      addHistoryItem(`🎉 ゲームセット！ 勝者: <b>${winnerText}</b> (${maxScore}${unitText})`, "game-end");
       document.getElementById("turnStartBox").style.display = "none";
       document.getElementById("missBtn").style.display = "none";
     }
